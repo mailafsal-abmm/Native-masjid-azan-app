@@ -1,0 +1,22 @@
+{
+  "appId": "com.masjidazanclock.app",
+  "appName": "Masjid Azan Clock",
+  "webDir": "www",
+  "bundledWebRuntime": false,
+  "backgroundColor": "#040d06",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#040d06"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 800,
+      "backgroundColor": "#040d06",
+      "showSpinner": false
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#e8c56a"
+    }
+  }
+}
