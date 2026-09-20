@@ -441,7 +441,7 @@ function setLang(v){
     uiTamil:'tamil',uiArabic:'arabic',uiAzan:'azan',uiIqama:'iqama',uiSound:'sound',qTitle:'qibla',qSub:'qsub',qCalibrate:'usecompass'};
   Object.entries(ids).forEach(([id,key])=>{const e=document.getElementById(id);if(e)e.textContent=t[key];});
   document.querySelectorAll('.langbar button').forEach(b=>b.classList.toggle('active',b.id==='lang-'+CURRENT_LANG));
-  const b=document.getElementById('notifBtn'); if(b && Notification.permission!=='granted') b.textContent=t.enable;
+  const b=document.getElementById('notifBtn'); if(b && typeof Notification!=='undefined' && Notification.permission!=='granted') b.textContent=t.enable;
   const extra=document.getElementById('extra'); if(extra) extra.setAttribute('data-special',t.special);
 }
 const PRAYERS=[
@@ -505,7 +505,7 @@ function updateNotifUI(){
     return;
   }
 
-  const p=Notification.permission;
+  const p=(typeof Notification!=='undefined')?Notification.permission:'unsupported';
   if(p==='granted'){
     dot.style.background='#00ff99';
     status.style.color='#00ff99';
@@ -1183,7 +1183,7 @@ setInterval(tick, 1000);
 // browsers require a real tap before allowing audio to begin.
 (function(){
   function tryStart(){
-    if(ALERTS_ON && Notification && Notification.permission==='granted'){ startKeepAlive(); }
+    if(ALERTS_ON && typeof Notification!=='undefined' && Notification.permission==='granted'){ startKeepAlive(); }
     document.removeEventListener('click', tryStart);
     document.removeEventListener('touchstart', tryStart);
   }
