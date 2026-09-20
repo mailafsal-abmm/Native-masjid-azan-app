@@ -13,7 +13,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;width:100%}
-body{background:#040d06;min-height:100vh;display:flex;justify-content:center;padding:10px 6px;font-family:'Courier New',monospace}
+body{background:#040d06;min-height:100vh;min-height:100dvh;display:flex;justify-content:center;padding:10px 6px;font-family:'Courier New',monospace}
 #app{background:#060e08;border:2px solid #0b2510;border-radius:12px;width:100%;max-width:480px;padding:14px 12px;color:#00ff99}
 .gl{text-shadow:0 0 10px #00ff99,0 0 20px #00ff9930}
 
@@ -174,7 +174,26 @@ body{font-family:'Inter','EPKTamil','EPKArabic',system-ui,sans-serif}
 #ms{font-size:.72rem!important;letter-spacing:2px;color:#f1d987}
 @media(max-width:520px){.logoBox{width:48px;height:48px;min-width:48px;padding:3px}.logoBox .epkLogo{width:38px!important;height:38px!important;max-width:39px;max-height:39px}#mn{font-size:1.12rem!important}#ms{font-size:.68rem!important}}
 </style>
-<link rel="icon" type="image/png" href="icon-192.png"></head>
+<link rel="icon" type="image/png" href="icon-192.png">
+<!-- TEMPORARY debug console — shows JS errors directly on screen, since
+     there's no computer to plug into for Chrome remote debugging.
+     Remove this whole block once the app is confirmed working. -->
+<script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+<script>eruda.init();</script>
+<script>
+  // Fixes the "small window until you touch something" bug: some Android
+  // WebViews report the wrong window height on first paint (before the
+  // system status/nav bars are fully measured), so 100vh/100dvh render
+  // too small until something forces a relayout — normally only a touch
+  // event does that. This forces the correct height immediately instead.
+  function fixViewportHeight(){
+    document.body.style.minHeight = window.innerHeight + 'px';
+  }
+  window.addEventListener('load', () => setTimeout(fixViewportHeight, 50));
+  window.addEventListener('resize', fixViewportHeight);
+  window.addEventListener('orientationchange', () => setTimeout(fixViewportHeight, 200));
+</script>
+</head>
 <body>
 
 <div id="splash">
@@ -794,6 +813,8 @@ function computeUpcomingPrayers() {
     let dateObj  = now;
     let azanMs   = mk(now, azanMin);
 
+    // If this prayer's time already passed today, roll forward to
+    // tomorrow's specific time for it (not just +24h — times shift daily).
     if (azanMs <= Date.now() && timesTomorrow) {
       const tBase = pMin(timesTomorrow[p.k]);
       if (tBase !== null) {
@@ -816,6 +837,10 @@ function computeUpcomingPrayers() {
 }
 
 // ── NATIVE ANDROID BRIDGE ──────────────────────────────────────────────
+// When running inside the Capacitor Android app (not a browser), prayer
+// alerts are scheduled with the device's own AlarmManager instead of the
+// web Notification/Push path. This survives Doze mode, phone restarts, and
+// the app being fully closed — and needs no internet connection at all.
 function isNativeApp() {
   return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 }
@@ -1086,6 +1111,8 @@ function toggleQibla(){
   p.style.display=p.classList.contains('open')?'block':'none'; if(p.classList.contains('open')){ setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'nearest'}),30); locateForQibla(); }
 }
 async function enableQibla(){
+  // On the native Android app, use the smooth, accurate fused-sensor
+  // compass instead of the web DeviceOrientation API.
   if(isNativeApp() && window.Capacitor.Plugins.QiblaCompass){
     try{
       const qc=window.Capacitor.Plugins.QiblaCompass;
@@ -1180,6 +1207,7 @@ function openBatteryOptimizationSettings(){
   const aa=window.Capacitor.Plugins.AzanAlarm;
   if(!aa) return;
 
+  // No web push server needed on native — alarms are scheduled on-device.
   const backendRow=document.getElementById('sbackend');
   if(backendRow && backendRow.parentElement) backendRow.parentElement.style.display='none';
 
@@ -1195,6 +1223,7 @@ function openBatteryOptimizationSettings(){
     if(battBtn && res && res.ignored) battBtn.style.display='none';
   }).catch(()=>{});
 
+  // Re-sync today's schedule with the native alarm system on every load.
   syncNativeAlarms();
 })();
 </script>
