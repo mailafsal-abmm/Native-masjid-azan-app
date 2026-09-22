@@ -716,14 +716,9 @@ function render(){
   }
   document.getElementById('rows').innerHTML=h;
 
-  const srMin=times?pMin(times.Sunrise)+(ADJ.Sunrise||0):null;
-  const sr=srMin!==null?f12(srMin):'--:--';
+  const sr=times?f12(pMin(times.Sunrise)):'--:--';
   document.getElementById('extra').innerHTML=`
-<div class="er"><div class="et">${L().sunrise}</div>
-  <div class="pw"><button class="adj am" onclick="chA('Sunrise',-1)">−</button>
-  <div class="ev">${sr}</div>
-  <button class="adj ap" onclick="chA('Sunrise',1)">+</button></div>
-</div>
+<div class="er"><div class="et">${L().sunrise}</div><div class="ev">${sr}</div></div>
 <div class="er"><div class="et">${L().jumuah}</div><div class="ev">1:00</div></div>
 <div class="er"><div class="et">${L().taraweeh}</div><div class="ev">8:45</div></div>
 <div class="er"><div class="et">${L().eid}</div><div class="ev">7:15</div></div>`;
@@ -851,34 +846,6 @@ function computeUpcomingPrayers() {
   return prayers;
 }
 
-/** Same rolling-to-tomorrow logic as computeUpcomingPrayers(), for Sunrise. */
-function computeSunriseMs() {
-  const now   = new Date();
-  const times = getTimes(now);
-  if (!times) return null;
-  const base = pMin(times.Sunrise);
-  if (base === null) return null;
-
-  const mk = (dateObj, m) => new Date(
-    dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(),
-    Math.floor(m / 60), m % 60, 0, 0
-  ).getTime();
-
-  let sunMin = base + (ADJ.Sunrise || 0);
-  let sunMs  = mk(now, sunMin);
-
-  if (sunMs <= Date.now()) {
-    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const timesTomorrow = getTimes(tomorrow);
-    const tBase = timesTomorrow ? pMin(timesTomorrow.Sunrise) : null;
-    if (tBase !== null) {
-      sunMin = tBase + (ADJ.Sunrise || 0);
-      sunMs  = mk(tomorrow, sunMin);
-    }
-  }
-  return sunMs;
-}
-
 // ── NATIVE ANDROID BRIDGE ──────────────────────────────────────────────
 // When running inside the Capacitor Android app (not a browser), prayer
 // alerts are scheduled with the device's own AlarmManager instead of the
@@ -890,13 +857,11 @@ function isNativeApp() {
 function syncNativeAlarms() {
   if (!isNativeApp()) return;
   if (!window.Capacitor.Plugins || !window.Capacitor.Plugins.AzanAlarm) return;
-  const prayers   = ALERTS_ON ? computeUpcomingPrayers() : [];
-  const sunriseMs = ALERTS_ON ? computeSunriseMs() : null;
-  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs }).catch(err => {
+  const prayers = ALERTS_ON ? computeUpcomingPrayers() : [];
+  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers }).catch(err => {
     console.log('Native alarm schedule failed:', err);
   });
 }
-
 
 function sendScheduleToSW() {
   if (isNativeApp()) { syncNativeAlarms(); return; }
