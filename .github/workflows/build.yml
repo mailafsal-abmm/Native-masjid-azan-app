@@ -17,32 +17,43 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
       - name: Install npm dependencies
         run: npm install
 
       - name: Sync Capacitor Android project
         run: npx cap sync android
 
-      - name: Make gradlew executable
-        run: chmod +x android/gradlew || true
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Grant execute permission and build debug APK
-        working-directory: android
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Use the committed debug keystore
+        # Without this, each build gets a brand-new random debug signing
+        # key, so Android treats every new APK as a different app and
+        # forces an uninstall before each install. Using the SAME
+        # checked-in keystore every time keeps the signature identical
+        # across builds, so installing a new APK updates the existing
+        # app in place — no uninstall needed.
         run: |
-          if [ ! -f gradlew ]; then
-            gradle wrapper --gradle-version 8.4
-          fi
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
 
-      - name: Upload APK artifact
+      - name: Set up Gradle 8.4
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.4
+
+      - name: Build debug APK
+        working-directory: android
+        run: gradle assembleDebug
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: masjid-azan-clock-debug-apk
+          name: masjid-azan-clock-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
