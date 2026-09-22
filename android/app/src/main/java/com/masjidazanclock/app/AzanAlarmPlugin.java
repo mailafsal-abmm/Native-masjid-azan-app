@@ -27,10 +27,11 @@ import org.json.JSONObject;
 /**
  * AzanAlarmPlugin
  * ----------------
- * Schedules exact, Doze-mode-resistant alarms for two kinds of events per
- * prayer: a "5 minutes before" notification, and the exact "azan time" event
+ * Schedules exact, Doze-mode-resistant alarms for three kinds of events per
+ * prayer: a "5 minutes before Azan" notification, the exact "azan time" event
  * (which shows a notification AND starts AzanPlaybackService to play the
- * actual azan audio automatically — no tap required).
+ * actual azan audio automatically — no tap required), and a "5 minutes
+ * before Iqama" notification.
  *
  * This works fully offline: the JS side already computes prayer times
  * locally (no network needed), and AlarmManager delivers the wake-up
@@ -49,6 +50,7 @@ public class AzanAlarmPlugin extends Plugin {
 
     public static final int TYPE_NOTIFY5 = 0;
     public static final int TYPE_AZAN    = 1;
+    public static final int TYPE_IQAMA5  = 2;
 
     @PluginMethod
     public void schedule(PluginCall call) {
@@ -70,21 +72,27 @@ public class AzanAlarmPlugin extends Plugin {
             for (int i = 0; i < prayers.length(); i++) {
                 JSONObject p = prayers.getJSONObject(i);
                 String key      = p.getString("key");
-                String nameTm   = p.optString("nameTm", key);
+                String nameEn   = p.optString("nameEn", key);
                 long azanMs     = p.getLong("azanMs");
+                long iqamaMs    = p.optLong("iqamaMs", 0L);
                 long notify5Ms  = azanMs - 5 * 60 * 1000L;
+                long iqama5Ms   = iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L;
 
                 if (notify5Ms > System.currentTimeMillis()) {
-                    scheduleOne(ctx, key, nameTm, notify5Ms, TYPE_NOTIFY5);
+                    scheduleOne(ctx, key, nameEn, iqamaMs, notify5Ms, TYPE_NOTIFY5);
                 }
                 if (azanMs > System.currentTimeMillis()) {
-                    scheduleOne(ctx, key, nameTm, azanMs, TYPE_AZAN);
+                    scheduleOne(ctx, key, nameEn, iqamaMs, azanMs, TYPE_AZAN);
+                }
+                if (iqama5Ms > System.currentTimeMillis()) {
+                    scheduleOne(ctx, key, nameEn, iqamaMs, iqama5Ms, TYPE_IQAMA5);
                 }
 
                 JSONObject entry = new JSONObject();
                 entry.put("key", key);
-                entry.put("nameTm", nameTm);
+                entry.put("nameEn", nameEn);
                 entry.put("azanMs", azanMs);
+                entry.put("iqamaMs", iqamaMs);
                 toPersist.put(entry);
             }
 
@@ -101,13 +109,14 @@ public class AzanAlarmPlugin extends Plugin {
         }
     }
 
-    static void scheduleOne(Context ctx, String key, String nameTm, long triggerAtMs, int type) {
+    static void scheduleOne(Context ctx, String key, String nameEn, long iqamaMs, long triggerAtMs, int type) {
         AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
 
         Intent intent = new Intent(ctx, AlarmReceiver.class);
         intent.putExtra("key", key);
-        intent.putExtra("nameTm", nameTm);
+        intent.putExtra("nameEn", nameEn);
+        intent.putExtra("iqamaMs", iqamaMs);
         intent.putExtra("type", type);
 
         int requestCode = requestCodeFor(key, type);
@@ -122,6 +131,9 @@ public class AzanAlarmPlugin extends Plugin {
                 if (am.canScheduleExactAlarms()) {
                     am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
                 } else {
+                    // Exact-alarm permission not granted — fall back to an
+                    // inexact-but-still-Doze-aware alarm rather than silently
+                    // failing. Accuracy may drift by a few minutes in this case.
                     am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAtMs, pi);
                 }
             } else {
@@ -133,6 +145,8 @@ public class AzanAlarmPlugin extends Plugin {
     }
 
     static int requestCodeFor(String key, int type) {
+        // Stable, unique per (key, type) so re-scheduling replaces the same
+        // alarm slot instead of piling up duplicates.
         return (key.hashCode() & 0x00FFFFFF) * 10 + type;
     }
 
@@ -147,7 +161,7 @@ public class AzanAlarmPlugin extends Plugin {
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject entry = arr.getJSONObject(i);
                 String key = entry.getString("key");
-                for (int type = 0; type <= 1; type++) {
+                for (int type = 0; type <= 2; type++) {
                     Intent intent = new Intent(ctx, AlarmReceiver.class);
                     int flags = PendingIntent.FLAG_UPDATE_CURRENT;
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {

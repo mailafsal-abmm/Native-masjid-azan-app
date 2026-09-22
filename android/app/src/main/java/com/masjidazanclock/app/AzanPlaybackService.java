@@ -1,6 +1,7 @@
 package com.masjidazanclock.app;
 
 import android.app.Notification;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
@@ -39,9 +40,9 @@ public class AzanPlaybackService extends Service {
         }
 
         String key    = intent != null ? intent.getStringExtra("key") : "Dhuhr";
-        String nameTm = intent != null ? intent.getStringExtra("nameTm") : "";
+        String nameEn = intent != null ? intent.getStringExtra("nameEn") : "";
 
-        startForeground(NOTIF_ID, buildNotification(nameTm));
+        startForeground(NOTIF_ID, buildNotification(nameEn));
         playAzan(key);
 
         return START_NOT_STICKY;
@@ -53,7 +54,7 @@ public class AzanPlaybackService extends Service {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         if (pm != null) {
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MasjidAzanClock:PlaybackWakeLock");
-            wakeLock.acquire(6 * 60 * 1000L);
+            wakeLock.acquire(6 * 60 * 1000L); // safety cap: azan recordings are a few minutes long
         }
 
         int resId = "Fajr".equals(key) ? R.raw.azan_fajr : R.raw.azan_normal;
@@ -76,6 +77,8 @@ public class AzanPlaybackService extends Service {
             return true;
         });
 
+        // Raise the alarm-stream volume so the azan is clearly audible even
+        // if the media/alarm volume was left low.
         AudioManager am = (AudioManager) getSystemService(AUDIO_SERVICE);
         if (am != null) {
             int max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM);
@@ -85,7 +88,7 @@ public class AzanPlaybackService extends Service {
         mediaPlayer.start();
     }
 
-    private Notification buildNotification(String nameTm) {
+    private Notification buildNotification(String nameEn) {
         Intent stopIntent = new Intent(this, AzanPlaybackService.class);
         stopIntent.setAction(ACTION_STOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -98,12 +101,12 @@ public class AzanPlaybackService extends Service {
 
         return new NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID_AZAN)
             .setSmallIcon(R.drawable.ic_stat_notify)
-            .setContentTitle("🕌 " + nameTm + " Azan")
-            .setContentText("Playing now — tap STOP to silence")
+            .setContentTitle("⏹ " + nameEn + " Azan playing now")
+            .setContentText("Tap STOP to silence")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setOngoing(true)
             .setContentIntent(openPi)
-            .addAction(0, "STOP", stopPi)
+            .addAction(0, "Stop", stopPi)
             .build();
     }
 

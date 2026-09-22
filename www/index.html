@@ -6,10 +6,10 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
-<meta name="apple-mobile-web-app-title" content="Masjid Azan Clock">
+<meta name="apple-mobile-web-app-title" content="Masjid Azan Times">
 <meta name="theme-color" content="#040d06">
 <link rel="manifest" href="manifest.json">
-<title>Masjid Azan Clock</title>
+<title>Masjid Azan Times</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{height:100%;width:100%}
@@ -197,7 +197,7 @@ body{font-family:'Inter','EPKTamil','EPKArabic',system-ui,sans-serif}
 <body>
 
 <div id="splash">
-  <div class="sp-nm">MASJID AZAN CLOCK</div>
+  <div class="sp-nm">MASJID AZAN TIMES</div>
   <div class="sp-ld"><span></span><span></span><span></span></div>
 </div>
 
@@ -230,7 +230,7 @@ body{font-family:'Inter','EPKTamil','EPKArabic',system-ui,sans-serif}
 
   <div id="sp">
     <div class="st gl" id="uiSettings">⚙ SETTINGS</div>
-    <div class="sf"><div class="sl" id="uiMasjidName">MASJID NAME</div><input class="si" id="sn" value="MASJID AZAN"></div>
+    <div class="sf"><div class="sl" id="uiMasjidName">MASJID NAME</div><input class="si" id="sn" value="NATIVE MASJID AZAN"></div>
     <div class="sf"><div class="sl" id="uiPhone">PHONE</div><input class="si" id="sph" value="9865757847"></div>
 
     <!-- NOTIFICATION SECTION -->
@@ -341,7 +341,7 @@ function startKeepAlive(){
     keepAliveAudio.volume=0.02;
     keepAliveAudio.play().catch(()=>{});
     if("mediaSession" in navigator){
-      navigator.mediaSession.metadata=new MediaMetadata({title:"Masjid Azan Clock",artist:"Listening for prayer times",album:CFG.name});
+      navigator.mediaSession.metadata=new MediaMetadata({title:"Masjid Azan Times",artist:"Listening for prayer times",album:CFG.name});
       navigator.mediaSession.setActionHandler("play",()=>{ if(keepAliveAudio) keepAliveAudio.play().catch(()=>{}); });
       navigator.mediaSession.setActionHandler("pause",()=>{});
     }
@@ -434,7 +434,7 @@ function setLang(v){
   document.documentElement.lang=CURRENT_LANG;
   document.documentElement.dir=CURRENT_LANG==='ar'?'rtl':'ltr'; document.title=L().title+'';
   const t=L();
-  const splash=document.querySelector('.sp-nm'); if(splash) splash.textContent='MASJID AZAN CLOCK';
+  const splash=document.querySelector('.sp-nm'); if(splash) splash.textContent='MASJID AZAN TIMES';
   const ids={uiClockTitle:'title',uiHms:'hms',uiTemp:'temp',uiDate:'date',uiHijri:'hijri',uiSettings:'settings',
     uiMasjidName:'masjid',uiPhone:'phone',uiLatitude:'lat',uiLongitude:'lng',uiPrayer:'prayer',uiQiblaBtn:'qiblaBtn',uiSettingsBtn:'settingsBtn',uiPlayAll:'playAll',uiStopAll:'stopAll',uiNotifications:'notifications',
     uiNotif1:'n1',uiNotif2:'n2',uiNotif3:'n3',uiSave:'save',uiCancel:'cancel',
@@ -454,11 +454,16 @@ const PRAYERS=[
 const pad=n=>String(n).padStart(2,'0');
 function pMin(s){if(!s)return null;const[h,m]=s.split(':').map(Number);return isNaN(h)?null:h*60+(m||0);}
 function f12(t){if(t===null||isNaN(t))return'--:--';const x=((t%1440)+1440)%1440,h=Math.floor(x/60),m=x%60;return(h%12||12)+':'+pad(m);}
-const ADJ={Fajr:0,Dhuhr:0,Asr:0,Maghrib:0,Isha:0};
-function chA(k,d){ADJ[k]=(ADJ[k]||0)+d;render();}
+const ADJ=JSON.parse(localStorage.getItem('azanAdj')||'null')||{Fajr:0,Dhuhr:0,Asr:0,Maghrib:0,Isha:0};
+function chA(k,d){
+  ADJ[k]=(ADJ[k]||0)+d;
+  localStorage.setItem('azanAdj', JSON.stringify(ADJ));
+  render();
+  sendScheduleToSW(); // immediately re-sync native alarms with the new time
+}
 
 // SETTINGS
-let CFG={name:'MASJID AZAN',phone:'9865757847',lat:'8.2933',lng:'77.2586',backendUrl:localStorage.getItem('backendUrl')||''};
+let CFG={name:'NATIVE MASJID AZAN',phone:'9865757847',lat:'8.2933',lng:'77.2586',backendUrl:localStorage.getItem('backendUrl')||''};
 function toggleS(){
   const p=document.getElementById('sp'),op=!p.classList.contains('op');
   p.classList.toggle('op');
@@ -494,14 +499,13 @@ function updateNotifUI(){
   const dot=document.getElementById('notifDot');
   if(!btn||!status||!dot) return;
 
-  if(!('Notification' in window)){
-    // Works via Netlify URL — not local file
-    dot.style.background='#ff6655';
-    status.style.color='#ff6655';
-    status.textContent='Open via URL (Netlify) for notifications';
-    btn.textContent='🔔 Open via Netlify URL';
-    btn.style.borderColor='#ff4444';
-    btn.style.color='#ff8866';
+  if(isNativeApp()){
+    dot.style.background='#00ff99';
+    status.style.color='#00ff99';
+    status.textContent='✓ Native alarms active — works fully offline';
+    btn.textContent='🔔 Notifications Enabled';
+    btn.style.borderColor='#00ff99';
+    btn.style.color='#00ff99';
     return;
   }
 
@@ -605,14 +609,10 @@ function toggleNotif(){
     }).catch(()=>{});
     return;
   }
-  if(!('Notification' in window)){
-    showBanner('Open via Netlify URL for notifications to work','rgba(80,20,0,.97)');
-    return;
-  }
   if(Notification.permission==='granted'){
     // Send test
     try{
-      new Notification('🕌 Masjid Azan Clock Test',{
+      new Notification('🕌 Masjid Azan Times Test',{
         body:'Notifications working! You will get alerts 5 min before Azan and Iqama.',
         tag:'test'
       });
@@ -631,8 +631,8 @@ function toggleNotif(){
     updateNotifUI();
     if(p==='granted'){
       try{
-        new Notification('🕌 Masjid Azan Clock',{
-          body:'Masjid Azan Clock: alerts 5 min before Azan & Iqama.',
+        new Notification('🕌 Masjid Azan Times',{
+          body:'Masjid Azan Times: alerts 5 min before Azan & Iqama.',
           tag:'welcome'
         });
       }catch(e){}
@@ -828,7 +828,7 @@ function computeUpcomingPrayers() {
     prayers.push({
       key:     p.k,
       name:    p.k,
-      nameTm:  p.tm,
+      nameEn:  p.en,
       azanMs:  azanMs,
       iqamaMs: mk(dateObj, iqamaMin),
     });

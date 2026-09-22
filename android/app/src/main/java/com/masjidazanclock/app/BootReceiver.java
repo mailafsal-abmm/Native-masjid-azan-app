@@ -14,6 +14,9 @@ import org.json.JSONObject;
  * re-schedules everything from the last-known schedule (saved to
  * SharedPreferences by AzanAlarmPlugin) so alerts keep working after a
  * restart without needing the app to be opened again first.
+ *
+ * Only re-schedules times that are still in the future — a past prayer time
+ * from before the reboot is simply skipped, it won't fire retroactively.
  */
 public class BootReceiver extends BroadcastReceiver {
     @Override
@@ -32,16 +35,21 @@ public class BootReceiver extends BroadcastReceiver {
             long now = System.currentTimeMillis();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject entry = arr.getJSONObject(i);
-                String key    = entry.getString("key");
-                String nameTm = entry.optString("nameTm", key);
-                long azanMs   = entry.getLong("azanMs");
+                String key     = entry.getString("key");
+                String nameEn  = entry.optString("nameEn", key);
+                long azanMs    = entry.getLong("azanMs");
+                long iqamaMs   = entry.optLong("iqamaMs", 0L);
                 long notify5Ms = azanMs - 5 * 60 * 1000L;
+                long iqama5Ms  = iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L;
 
                 if (notify5Ms > now) {
-                    AzanAlarmPlugin.scheduleOne(context, key, nameTm, notify5Ms, AzanAlarmPlugin.TYPE_NOTIFY5);
+                    AzanAlarmPlugin.scheduleOne(context, key, nameEn, iqamaMs, notify5Ms, AzanAlarmPlugin.TYPE_NOTIFY5);
                 }
                 if (azanMs > now) {
-                    AzanAlarmPlugin.scheduleOne(context, key, nameTm, azanMs, AzanAlarmPlugin.TYPE_AZAN);
+                    AzanAlarmPlugin.scheduleOne(context, key, nameEn, iqamaMs, azanMs, AzanAlarmPlugin.TYPE_AZAN);
+                }
+                if (iqama5Ms > now) {
+                    AzanAlarmPlugin.scheduleOne(context, key, nameEn, iqamaMs, iqama5Ms, AzanAlarmPlugin.TYPE_IQAMA5);
                 }
             }
         } catch (JSONException ignored) {}
