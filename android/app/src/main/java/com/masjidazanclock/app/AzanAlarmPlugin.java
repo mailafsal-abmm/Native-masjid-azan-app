@@ -71,12 +71,20 @@ public class AzanAlarmPlugin extends Plugin {
         try {
             for (int i = 0; i < prayers.length(); i++) {
                 JSONObject p = prayers.getJSONObject(i);
-                String key      = p.getString("key");
-                String nameEn   = p.optString("nameEn", key);
-                long azanMs     = p.getLong("azanMs");
-                long iqamaMs    = p.optLong("iqamaMs", 0L);
-                long notify5Ms  = azanMs - 5 * 60 * 1000L;
-                long iqama5Ms   = iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L;
+                String key       = p.getString("key");
+                String nameEn    = p.optString("nameEn", key);
+                long azanMs      = p.getLong("azanMs");
+                long iqamaMs     = p.optLong("iqamaMs", 0L);
+                long notify5Ms   = azanMs - 5 * 60 * 1000L;
+                // Use the exact reminder time JS already calculated (it
+                // correctly shortens the offset for prayers — like
+                // Maghrib — where Azan-to-Iqama is under 5 minutes, so
+                // this never lands before Azan itself). Falls back to a
+                // flat 5-minute offset only if an older JS build didn't
+                // send it.
+                long iqama5Ms    = p.has("iqamaReminderMs")
+                    ? p.getLong("iqamaReminderMs")
+                    : (iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L);
 
                 if (notify5Ms > System.currentTimeMillis()) {
                     scheduleOne(ctx, key, nameEn, iqamaMs, notify5Ms, TYPE_NOTIFY5);
@@ -93,6 +101,7 @@ public class AzanAlarmPlugin extends Plugin {
                 entry.put("nameEn", nameEn);
                 entry.put("azanMs", azanMs);
                 entry.put("iqamaMs", iqamaMs);
+                entry.put("iqamaReminderMs", iqama5Ms);
                 toPersist.put(entry);
             }
 

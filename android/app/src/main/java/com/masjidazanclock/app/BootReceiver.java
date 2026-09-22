@@ -40,7 +40,9 @@ public class BootReceiver extends BroadcastReceiver {
                 long azanMs    = entry.getLong("azanMs");
                 long iqamaMs   = entry.optLong("iqamaMs", 0L);
                 long notify5Ms = azanMs - 5 * 60 * 1000L;
-                long iqama5Ms  = iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L;
+                long iqama5Ms  = entry.has("iqamaReminderMs")
+                    ? entry.getLong("iqamaReminderMs")
+                    : (iqamaMs > 0 ? iqamaMs - 5 * 60 * 1000L : 0L);
 
                 if (notify5Ms > now) {
                     AzanAlarmPlugin.scheduleOne(context, key, nameEn, iqamaMs, notify5Ms, AzanAlarmPlugin.TYPE_NOTIFY5);
