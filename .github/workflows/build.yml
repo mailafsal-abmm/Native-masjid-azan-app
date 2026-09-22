@@ -29,16 +29,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # No separate "Set up Android SDK" step — GitHub's ubuntu-latest
+      # runners already come with the Android SDK pre-installed
+      # (ANDROID_HOME / ANDROID_SDK_ROOT are already set). The
+      # android-actions/setup-android action tries to additionally
+      # install a legacy "tools" package that Google has since removed
+      # from the SDK repository, which is why that step was failing —
+      # skipping it avoids the problem entirely.
+      - name: Accept Android SDK licenses (safety net)
+        run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - name: Use the committed debug keystore
-        # Without this, each build gets a brand-new random debug signing
-        # key, so Android treats every new APK as a different app and
-        # forces an uninstall before each install. Using the SAME
-        # checked-in keystore every time keeps the signature identical
-        # across builds, so installing a new APK updates the existing
-        # app in place — no uninstall needed.
         run: |
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
