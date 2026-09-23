@@ -27,12 +27,19 @@ public class BootReceiver extends BroadcastReceiver {
         }
 
         SharedPreferences prefs = context.getSharedPreferences(AzanAlarmPlugin.PREFS_NAME, Context.MODE_PRIVATE);
+        long now = System.currentTimeMillis();
+
+        // Re-arm the sunrise alarm too, if one was pending.
+        long sunriseMs = prefs.getLong(AzanAlarmPlugin.KEY_SUNRISE_MS, 0L);
+        if (sunriseMs > now) {
+            AzanAlarmPlugin.scheduleOne(context, "Sunrise", "Sunrise", 0L, sunriseMs, AzanAlarmPlugin.TYPE_SUNRISE);
+        }
+
         String json = prefs.getString(AzanAlarmPlugin.KEY_SCHEDULE_JSON, null);
         if (json == null) return;
 
         try {
             JSONArray arr = new JSONArray(json);
-            long now = System.currentTimeMillis();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject entry = arr.getJSONObject(i);
                 String key     = entry.getString("key");

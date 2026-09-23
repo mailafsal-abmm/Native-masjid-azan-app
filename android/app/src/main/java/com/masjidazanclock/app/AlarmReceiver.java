@@ -49,6 +49,8 @@ public class AlarmReceiver extends BroadcastReceiver {
                 showNotify5(context, key, nameEn, iqamaMs);
             } else if (type == AzanAlarmPlugin.TYPE_IQAMA5) {
                 showIqama5(context, key, nameEn);
+            } else if (type == AzanAlarmPlugin.TYPE_SUNRISE) {
+                showSunrise(context);
             } else {
                 // Single notification for azan time: AzanPlaybackService posts
                 // its own ongoing "Stop" notification the instant it starts
@@ -145,5 +147,28 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) nm.notify(("iqama5_" + key).hashCode(), notification);
+    }
+
+    private void showSunrise(Context context) {
+        // Plain notification only — no azan sound, since sunrise isn't a
+        // call to prayer (it's actually when prayer becomes prohibited
+        // until Dhuhr).
+        Intent openIntent = new Intent(context, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent pi = PendingIntent.getActivity(context, "Sunrise".hashCode(), openIntent, flags);
+
+        Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
+            .setSmallIcon(R.drawable.ic_stat_notify)
+            .setContentTitle("🌅 Sunrise")
+            .setContentText("Sunrise time now")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build();
+
+        NotificationManager nm2 = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (nm2 != null) nm2.notify("sunrise".hashCode(), notification);
     }
 }

@@ -51,6 +51,8 @@ public class AzanAlarmPlugin extends Plugin {
     public static final int TYPE_NOTIFY5 = 0;
     public static final int TYPE_AZAN    = 1;
     public static final int TYPE_IQAMA5  = 2;
+    public static final int TYPE_SUNRISE = 3;
+    public static final String KEY_SUNRISE_MS = "sunrise_ms";
 
     @PluginMethod
     public void schedule(PluginCall call) {
@@ -108,7 +110,20 @@ public class AzanAlarmPlugin extends Plugin {
             // Persist so BootReceiver can re-schedule after a phone restart,
             // even before the app/WebView has been opened again.
             SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
-            prefs.edit().putString(KEY_SCHEDULE_JSON, toPersist.toString()).apply();
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString(KEY_SCHEDULE_JSON, toPersist.toString());
+
+            // Sunrise: a single, plain notification (no azan sound — sunrise
+            // isn't a call to prayer). Kept separate from the prayers array
+            // since it doesn't have Iqama/azan playback like a real prayer.
+            long sunriseMs = call.getData().optLong("sunriseMs", 0L);
+            if (sunriseMs > System.currentTimeMillis()) {
+                scheduleOne(ctx, "Sunrise", "Sunrise", 0L, sunriseMs, TYPE_SUNRISE);
+                editor.putLong(KEY_SUNRISE_MS, sunriseMs);
+            } else {
+                editor.remove(KEY_SUNRISE_MS);
+            }
+            editor.apply();
 
             JSObject result = new JSObject();
             result.put("scheduled", toPersist.length());
@@ -161,26 +176,35 @@ public class AzanAlarmPlugin extends Plugin {
 
     static void cancelAllKnown(Context ctx) {
         SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+
+        // Cancel the sunrise alarm unconditionally — cheap no-op if it was
+        // never scheduled.
+        cancelOne(ctx, am, "Sunrise", TYPE_SUNRISE);
+
         String json = prefs.getString(KEY_SCHEDULE_JSON, null);
         if (json == null) return;
         try {
             JSONArray arr = new JSONArray(json);
-            AlarmManager am = (AlarmManager) ctx.getSystemService(Context.ALARM_SERVICE);
-            if (am == null) return;
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject entry = arr.getJSONObject(i);
                 String key = entry.getString("key");
                 for (int type = 0; type <= 2; type++) {
-                    Intent intent = new Intent(ctx, AlarmReceiver.class);
-                    int flags = PendingIntent.FLAG_UPDATE_CURRENT;
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                        flags |= PendingIntent.FLAG_IMMUTABLE;
-                    }
-                    PendingIntent pi = PendingIntent.getBroadcast(ctx, requestCodeFor(key, type), intent, flags);
-                    am.cancel(pi);
+                    cancelOne(ctx, am, key, type);
                 }
             }
         } catch (JSONException ignored) {}
+    }
+
+    static void cancelOne(Context ctx, AlarmManager am, String key, int type) {
+        Intent intent = new Intent(ctx, AlarmReceiver.class);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        PendingIntent pi = PendingIntent.getBroadcast(ctx, requestCodeFor(key, type), intent, flags);
+        am.cancel(pi);
     }
 
     @PluginMethod
