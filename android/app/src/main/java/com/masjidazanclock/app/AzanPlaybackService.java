@@ -30,6 +30,20 @@ public class AzanPlaybackService extends Service {
     private MediaPlayer mediaPlayer;
     private PowerManager.WakeLock wakeLock;
 
+    // A direct reference to the currently-running instance (if any), so the
+    // Capacitor plugin can stop playback with a plain in-process method call
+    // instead of sending a new Intent via Context.startService(). The
+    // Intent route could silently fail with a background-start restriction
+    // exception depending on the app's exact state when Stop was tapped —
+    // this direct reference always works, regardless of app state.
+    private static AzanPlaybackService runningInstance;
+
+    public static void stopIfRunning() {
+        if (runningInstance != null) {
+            runningInstance.stopPlayback();
+        }
+    }
+
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         String action = intent != null ? intent.getAction() : null;
@@ -39,13 +53,43 @@ public class AzanPlaybackService extends Service {
             return START_NOT_STICKY;
         }
 
-        String key    = intent != null ? intent.getStringExtra("key") : "Dhuhr";
-        String nameEn = intent != null ? intent.getStringExtra("nameEn") : "";
+        String key     = intent != null ? intent.getStringExtra("key") : "Dhuhr";
+        String nameEn  = intent != null ? intent.getStringExtra("nameEn") : "";
+        boolean silent = intent != null && intent.getBooleanExtra("silent", false);
 
+        if (silent) {
+            // Emergency silent mode: no audio, no ongoing "Stop" state —
+            // just a quiet, dismissible notification so you still know the
+            // azan time arrived, without any sound interrupting you.
+            startForeground(NOTIF_ID, buildSilentNotification(nameEn));
+            stopForeground(false); // detach immediately; notification stays, service ends
+            stopSelf();
+            return START_NOT_STICKY;
+        }
+
+        runningInstance = this;
         startForeground(NOTIF_ID, buildNotification(nameEn));
         playAzan(key);
 
         return START_NOT_STICKY;
+    }
+
+    private Notification buildSilentNotification(String nameEn) {
+        Intent openIntent = new Intent(this, MainActivity.class);
+        openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+        PendingIntent openPi = PendingIntent.getActivity(this, 2, openIntent, flags);
+
+        return new NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID_AZAN)
+            .setSmallIcon(R.drawable.ic_stat_notify)
+            .setContentTitle("🔇 " + nameEn + " Azan time (Silent Mode)")
+            .setContentText("Silent Mode is on — no sound played")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(openPi)
+            .setSilent(true)
+            .build();
     }
 
     private void playAzan(String key) {
@@ -114,6 +158,7 @@ public class AzanPlaybackService extends Service {
         stopPlaybackInternal();
         stopForeground(true);
         stopSelf();
+        if (runningInstance == this) runningInstance = null;
     }
 
     private void stopPlaybackInternal() {
@@ -133,6 +178,7 @@ public class AzanPlaybackService extends Service {
     @Override
     public void onDestroy() {
         stopPlaybackInternal();
+        if (runningInstance == this) runningInstance = null;
         super.onDestroy();
     }
 
