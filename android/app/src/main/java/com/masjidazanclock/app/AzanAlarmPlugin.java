@@ -53,6 +53,7 @@ public class AzanAlarmPlugin extends Plugin {
     public static final int TYPE_IQAMA5  = 2;
     public static final int TYPE_SUNRISE = 3;
     public static final String KEY_SUNRISE_MS = "sunrise_ms";
+    public static final String KEY_SILENT_MODE = "silent_mode";
 
     @PluginMethod
     public void schedule(PluginCall call) {
@@ -123,6 +124,12 @@ public class AzanAlarmPlugin extends Plugin {
             } else {
                 editor.remove(KEY_SUNRISE_MS);
             }
+
+            // Emergency silent mode — persisted so AlarmReceiver/AzanPlaybackService
+            // can read it at the moment an alarm actually fires (they run
+            // independently of this call, possibly hours/days later).
+            boolean silentMode = call.getData().optBoolean("silentMode", false);
+            editor.putBoolean(KEY_SILENT_MODE, silentMode);
             editor.apply();
 
             JSObject result = new JSObject();
@@ -282,9 +289,12 @@ public class AzanAlarmPlugin extends Plugin {
 
     @PluginMethod
     public void stopAzan(PluginCall call) {
-        Intent stopIntent = new Intent(getContext(), AzanPlaybackService.class);
-        stopIntent.setAction(AzanPlaybackService.ACTION_STOP);
-        getContext().startService(stopIntent);
+        // Direct in-process call — always works instantly, regardless of
+        // whether the app is foreground/background, unlike sending a new
+        // Intent via Context.startService() (which can silently throw a
+        // background-start-restriction exception depending on exact app
+        // state, causing the old "stop sometimes does nothing" bug).
+        AzanPlaybackService.stopIfRunning();
         call.resolve();
     }
 }

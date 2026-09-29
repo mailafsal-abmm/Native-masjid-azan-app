@@ -251,10 +251,16 @@ body{font-family:'Inter','EPKTamil','EPKArabic',system-ui,sans-serif}
         </button>
       </div>
 
-      <!-- Push server URL (needed for background alerts even when app is closed) -->
-      <div style="margin-bottom:8px">
-        <div style="font-size:.5rem;color:#00cc77;margin-bottom:4px">PUSH SERVER URL (for background alerts)</div>
-        <input class="si" id="sbackend" placeholder="https://your-server.onrender.com" style="font-size:.62rem">
+      <!-- Emergency silent mode: keeps every prayer's reminders/notifications
+           scheduled and visible as normal, but mutes the actual azan sound
+           across all 5 prayers at once — for meetings, hospitals, etc.
+           Tucked into Settings deliberately, not the front screen, so it
+           doesn't take up main-screen space for something rarely toggled. -->
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px;padding:8px;background:rgba(0,0,0,.2);border-radius:5px">
+        <span style="font-size:.62rem;color:#e8c56a;font-weight:700" id="uiSilentToggleLabel">🔇 Silent Mode (Emergency)</span>
+        <button id="silentToggleBtn" onclick="toggleSilentMode()" style="width:54px;height:28px;border-radius:14px;border:2px solid #005520;background:#0a3010;position:relative;cursor:pointer;padding:0;flex-shrink:0">
+          <span id="silentToggleKnob" style="position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#666;transition:left .2s,background .2s"></span>
+        </button>
       </div>
 
       <!-- Permission button -->
@@ -500,6 +506,7 @@ function toggleS(){
     const sbk=document.getElementById('sbackend'); if(sbk) sbk.value=CFG.backendUrl;
     updateNotifUI();
     updateAlertsToggleUI();
+    updateSilentToggleUI();
   }
 }
 function saveS(){
@@ -535,6 +542,9 @@ function updateNotifUI(){
     return;
   }
 
+  // Everything below only ever runs in a plain browser (not this native
+  // app, which always returns above) — kept only as a safety fallback in
+  // case isNativeApp() detection ever fails on some device.
   const p=(typeof Notification!=='undefined')?Notification.permission:'unsupported';
   if(p==='granted'){
     dot.style.background='#00ff99';
@@ -547,7 +557,7 @@ function updateNotifUI(){
   } else if(p==='denied'){
     dot.style.background='#ff4444';
     status.style.color='#ff6655';
-    status.textContent='Blocked — go to phone Settings → Browser → Notifications → Allow';
+    status.textContent='Blocked — go to phone Settings → Notifications → Allow';
     btn.textContent='⚙ Open Phone Settings';
     btn.style.borderColor='#ff4444';
     btn.style.color='#ff6655';
@@ -842,10 +852,14 @@ function computeUpcomingPrayers() {
     let iqamaMin = azanMin + p.iq;
     let dateObj  = now;
     let azanMs   = mk(now, azanMin);
+    let iqamaMsToday = mk(now, iqamaMin);
 
-    // If this prayer's time already passed today, roll forward to
-    // tomorrow's specific time for it (not just +24h — times shift daily).
-    if (azanMs <= Date.now() && timesTomorrow) {
+    // Roll to tomorrow only once BOTH Azan and Iqama for today are in the
+    // past. Using just Azan here was the bug: during the gap between Azan
+    // and Iqama (e.g. Maghrib's is only ~3 minutes), this would wrongly
+    // treat the whole prayer as "done" and jump to tomorrow — silently
+    // dropping today's still-pending Iqama reminder.
+    if (iqamaMsToday <= Date.now() && timesTomorrow) {
       const tBase = pMin(timesTomorrow[p.k]);
       if (tBase !== null) {
         azanMin  = tBase + (ADJ[p.k] || 0);
@@ -917,7 +931,7 @@ function syncNativeAlarms() {
   if (!window.Capacitor.Plugins || !window.Capacitor.Plugins.AzanAlarm) return;
   const prayers   = ALERTS_ON ? computeUpcomingPrayers() : [];
   const sunriseMs = ALERTS_ON ? computeSunriseMs() : null;
-  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs }).catch(err => {
+  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs, silentMode: SILENT_MODE }).catch(err => {
     console.log('Native alarm schedule failed:', err);
   });
 }
@@ -1104,6 +1118,29 @@ function toggleAlertsOn(){
   if(ALERTS_ON){ subscribeToPush(); startKeepAlive(); } else { unsubscribeFromPush(); stopKeepAlive(); }
   sendScheduleToSW(); // re-sync: sends real schedule if ON, clears it if OFF
 }
+
+// Emergency silent mode — mutes azan audio + notification sound for all 5
+// prayers at once, while reminders/notifications still show normally.
+// Reminders staying visible (just silent) is intentional: you can still
+// glance at your phone and see a prayer happened, you just won't be
+// interrupted by sound during a meeting, hospital visit, etc.
+let SILENT_MODE = localStorage.getItem('silentMode') === 'true'; // default OFF
+function updateSilentToggleUI(){
+  const knob=document.getElementById('silentToggleKnob');
+  const btn=document.getElementById('silentToggleBtn');
+  if(!knob||!btn) return;
+  if(SILENT_MODE){
+    knob.style.left='28px'; knob.style.background='#ff6655'; btn.style.borderColor='#ff6655';
+  }else{
+    knob.style.left='2px'; knob.style.background='#666'; btn.style.borderColor='#005520';
+  }
+}
+function toggleSilentMode(){
+  SILENT_MODE=!SILENT_MODE;
+  localStorage.setItem('silentMode', SILENT_MODE?'true':'false');
+  updateSilentToggleUI();
+  sendScheduleToSW(); // immediately re-sync so native alarms pick up the new silent setting
+}
 function checkAlerts(now){
   const times=getTimes(now);
   if(!times) return;
@@ -1128,8 +1165,18 @@ function checkAlerts(now){
         sendNotif(L().notifAt+name,p.k+' Prayer Time',uid);
       }
       showBanner(L().notifAt+name,'rgba(0,80,20,.98)',true);
-      playKey(p.k);
-      showFloatingStop(p.tm);
+      // In the native app, the Android alarm system already plays the azan
+      // reliably (foreground, background, or closed) and shows its own
+      // Stop notification. Also auto-playing here (the old website-only
+      // behavior) would start a SECOND, overlapping copy of the audio
+      // whenever the app happens to be open right at the exact minute —
+      // that's the "two azans at once" bug. Native handles playback
+      // exclusively now; this JS path only still auto-plays for the plain
+      // web/PWA version, which has no native alarm to rely on.
+      if (!isNativeApp()) {
+        playKey(p.k);
+        showFloatingStop(p.tm);
+      }
     }
   }
 }
@@ -1276,10 +1323,6 @@ function openBatteryOptimizationSettings(){
   if(!isNativeApp()) return;
   const aa=window.Capacitor.Plugins.AzanAlarm;
   if(!aa) return;
-
-  // No web push server needed on native — alarms are scheduled on-device.
-  const backendRow=document.getElementById('sbackend');
-  if(backendRow && backendRow.parentElement) backendRow.parentElement.style.display='none';
 
   const exactBtn=document.getElementById('exactAlarmBtn');
   const battBtn=document.getElementById('batteryOptBtn');

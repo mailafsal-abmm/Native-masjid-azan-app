@@ -7,6 +7,7 @@ import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.PowerManager;
 
@@ -43,14 +44,17 @@ public class AlarmReceiver extends BroadcastReceiver {
             long iqamaMs  = intent.getLongExtra("iqamaMs", 0L);
             int type      = intent.getIntExtra("type", AzanAlarmPlugin.TYPE_NOTIFY5);
 
+            SharedPreferences prefs = context.getSharedPreferences(AzanAlarmPlugin.PREFS_NAME, Context.MODE_PRIVATE);
+            boolean silent = prefs.getBoolean(AzanAlarmPlugin.KEY_SILENT_MODE, false);
+
             ensureChannels(context);
 
             if (type == AzanAlarmPlugin.TYPE_NOTIFY5) {
-                showNotify5(context, key, nameEn, iqamaMs);
+                showNotify5(context, key, nameEn, iqamaMs, silent);
             } else if (type == AzanAlarmPlugin.TYPE_IQAMA5) {
-                showIqama5(context, key, nameEn);
+                showIqama5(context, key, nameEn, silent);
             } else if (type == AzanAlarmPlugin.TYPE_SUNRISE) {
-                showSunrise(context);
+                showSunrise(context, silent);
             } else {
                 // Single notification for azan time: AzanPlaybackService posts
                 // its own ongoing "Stop" notification the instant it starts
@@ -60,6 +64,7 @@ public class AlarmReceiver extends BroadcastReceiver {
                 svc.setAction(AzanPlaybackService.ACTION_PLAY);
                 svc.putExtra("key", key);
                 svc.putExtra("nameEn", nameEn);
+                svc.putExtra("silent", silent);
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(svc);
                 } else {
@@ -96,7 +101,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         }
     }
 
-    private void showNotify5(Context context, String key, String nameEn, long iqamaMs) {
+    private void showNotify5(Context context, String key, String nameEn, long iqamaMs, boolean silent) {
         Intent openIntent = new Intent(context, MainActivity.class);
         openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -122,13 +127,14 @@ public class AlarmReceiver extends BroadcastReceiver {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setContentIntent(pi)
+            .setSilent(silent)
             .build();
 
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) nm.notify(("notify5_" + key).hashCode(), notification);
     }
 
-    private void showIqama5(Context context, String key, String nameEn) {
+    private void showIqama5(Context context, String key, String nameEn, boolean silent) {
         Intent openIntent = new Intent(context, MainActivity.class);
         openIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         int flags = PendingIntent.FLAG_UPDATE_CURRENT;
@@ -143,13 +149,14 @@ public class AlarmReceiver extends BroadcastReceiver {
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setAutoCancel(true)
             .setContentIntent(pi)
+            .setSilent(silent)
             .build();
 
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) nm.notify(("iqama5_" + key).hashCode(), notification);
     }
 
-    private void showSunrise(Context context) {
+    private void showSunrise(Context context, boolean silent) {
         // Plain notification only — no azan sound, since sunrise isn't a
         // call to prayer (it's actually when prayer becomes prohibited
         // until Dhuhr).
@@ -166,6 +173,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(pi)
+            .setSilent(silent)
             .build();
 
         NotificationManager nm2 = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);

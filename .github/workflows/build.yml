@@ -41,8 +41,13 @@ jobs:
 
       - name: Use the committed debug keystore
         run: |
+          if [ ! -f debug.keystore ]; then
+            echo "::error::debug.keystore is missing from the repo root! This build would sign with a random key instead, breaking in-place updates and forcing an uninstall. Add debug.keystore to the repo and push again."
+            exit 1
+          fi
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
+          echo "Debug keystore found and applied — signature will match previous builds."
 
       - name: Set up Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
