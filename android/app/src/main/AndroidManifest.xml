@@ -2,24 +2,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <!-- Core -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
+    <!-- Qibla compass -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Notifications (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Exact, Doze-resistant alarms for on-time azan (Android 12+) -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
 
+    <!-- Re-schedule alarms after phone restart -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Brief wake to reliably fire the alarm + start playback -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- Foreground service that plays the azan audio automatically -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <!-- Optional: ask the user to exempt the app from battery optimization
+         for maximum reliability (user must approve this via Settings). -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <uses-feature android:name="android.hardware.sensor.compass" android:required="false" />
@@ -31,7 +40,8 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true">
 
         <activity
             android:name=".MainActivity"
@@ -46,10 +56,12 @@
             </intent-filter>
         </activity>
 
+        <!-- Fired by AlarmManager at each exact prayer/notification time -->
         <receiver
             android:name=".AlarmReceiver"
             android:exported="false" />
 
+        <!-- Re-schedules alarms after a phone restart -->
         <receiver
             android:name=".BootReceiver"
             android:exported="false">
@@ -59,6 +71,7 @@
             </intent-filter>
         </receiver>
 
+        <!-- Plays the azan audio automatically, in the foreground -->
         <service
             android:name=".AzanPlaybackService"
             android:exported="false"

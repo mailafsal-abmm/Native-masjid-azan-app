@@ -1324,6 +1324,19 @@ function openBatteryOptimizationSettings(){
   const aa=window.Capacitor.Plugins.AzanAlarm;
   if(!aa) return;
 
+  // Keeps the app's UI in sync with what's actually playing natively —
+  // fires when automatic azan starts, and when it stops for ANY reason
+  // (finished naturally, stopped from the notification, or stopped from
+  // inside the app). This is what makes the floating Stop button
+  // disappear correctly in every case, matching the notification.
+  aa.addListener('azanPlaybackState', (data) => {
+    if (data && data.playing) {
+      showFloatingStop(data.key || '');
+    } else {
+      removeFloatingStop();
+    }
+  });
+
   const exactBtn=document.getElementById('exactAlarmBtn');
   const battBtn=document.getElementById('batteryOptBtn');
   if(exactBtn) exactBtn.style.display='block';

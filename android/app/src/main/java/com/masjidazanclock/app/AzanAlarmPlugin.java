@@ -55,6 +55,27 @@ public class AzanAlarmPlugin extends Plugin {
     public static final String KEY_SUNRISE_MS = "sunrise_ms";
     public static final String KEY_SILENT_MODE = "silent_mode";
 
+    // Lets AzanPlaybackService (a completely separate class with no direct
+    // access to the JS bridge) tell the app's UI when automatic playback
+    // actually starts/stops — including when it finishes naturally on its
+    // own. Without this, the app's Stop button has no way of knowing
+    // playback ended, since native audio runs independently of the WebView.
+    private static AzanAlarmPlugin instance;
+
+    @Override
+    public void load() {
+        super.load();
+        instance = this;
+    }
+
+    public static void notifyPlaybackState(boolean playing, String key) {
+        if (instance == null) return; // app not open right now — nothing to notify
+        JSObject data = new JSObject();
+        data.put("playing", playing);
+        data.put("key", key == null ? "" : key);
+        instance.notifyListeners("azanPlaybackState", data);
+    }
+
     @PluginMethod
     public void schedule(PluginCall call) {
         JSArray prayers = call.getArray("prayers");

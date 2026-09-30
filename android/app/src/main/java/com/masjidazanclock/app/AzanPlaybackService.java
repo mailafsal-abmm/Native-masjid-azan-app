@@ -69,6 +69,7 @@ public class AzanPlaybackService extends Service {
 
         runningInstance = this;
         startForeground(NOTIF_ID, buildNotification(nameEn));
+        AzanAlarmPlugin.notifyPlaybackState(true, key); // tells the app UI "azan is now playing"
         playAzan(key);
 
         return START_NOT_STICKY;
@@ -159,6 +160,11 @@ public class AzanPlaybackService extends Service {
         stopForeground(true);
         stopSelf();
         if (runningInstance == this) runningInstance = null;
+        // Tells the app UI "azan has stopped" — covers every case the same
+        // way: natural finish, tapped Stop in the notification, or tapped
+        // Stop inside the app. This is the one place all three funnel
+        // through, so the app and notification always end up in sync.
+        AzanAlarmPlugin.notifyPlaybackState(false, null);
     }
 
     private void stopPlaybackInternal() {
@@ -179,6 +185,9 @@ public class AzanPlaybackService extends Service {
     public void onDestroy() {
         stopPlaybackInternal();
         if (runningInstance == this) runningInstance = null;
+        // Safety net in case the OS kills the service directly without
+        // going through stopPlayback() — harmless to send this twice.
+        AzanAlarmPlugin.notifyPlaybackState(false, null);
         super.onDestroy();
     }
 
