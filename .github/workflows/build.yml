@@ -29,13 +29,6 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # No separate "Set up Android SDK" step — GitHub's ubuntu-latest
-      # runners already come with the Android SDK pre-installed
-      # (ANDROID_HOME / ANDROID_SDK_ROOT are already set). The
-      # android-actions/setup-android action tries to additionally
-      # install a legacy "tools" package that Google has since removed
-      # from the SDK repository, which is why that step was failing —
-      # skipping it avoids the problem entirely.
       - name: Accept Android SDK licenses (safety net)
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
@@ -56,7 +49,16 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: gradle assembleDebug
+        # --no-build-cache: our keystore is copied into place by a plain
+        # shell step above, outside Gradle's own dependency tracking, so
+        # Gradle has no way to know when it changes. Without this flag,
+        # Gradle's remote build cache can occasionally reuse an old,
+        # already-signed APK from a previous run instead of actually
+        # resigning with the keystore we just placed — which is exactly
+        # what caused the "package conflicts" install error to resurface
+        # even though the correct keystore was in place. This flag forces
+        # a genuine fresh build and sign every single time.
+        run: gradle assembleDebug --no-build-cache
 
       - name: Upload APK
         uses: actions/upload-artifact@v4

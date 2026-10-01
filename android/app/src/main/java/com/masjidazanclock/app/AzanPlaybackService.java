@@ -5,6 +5,7 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.MediaPlayer;
@@ -37,11 +38,26 @@ public class AzanPlaybackService extends Service {
     // exception depending on the app's exact state when Stop was tapped —
     // this direct reference always works, regardless of app state.
     private static AzanPlaybackService runningInstance;
+    private static String currentPlayingKey = null;
 
     public static void stopIfRunning() {
         if (runningInstance != null) {
             runningInstance.stopPlayback();
         }
+    }
+
+    // Lets the app ASK "is something playing right now, and which prayer?"
+    // — needed for the case where the app is opened (e.g. by tapping the
+    // notification) AFTER azan already started: the "started" event fired
+    // before anyone was listening, so without this query the app would
+    // never find out it's currently playing and the Stop button would
+    // never appear until playback ends on its own.
+    public static boolean isCurrentlyPlaying() {
+        return runningInstance != null;
+    }
+
+    public static String getCurrentPlayingKey() {
+        return currentPlayingKey;
     }
 
     @Override
@@ -129,6 +145,17 @@ public class AzanPlaybackService extends Service {
             int max = am.getStreamMaxVolume(AudioManager.STREAM_ALARM);
             am.setStreamVolume(AudioManager.STREAM_ALARM, max, 0);
         }
+
+        // Apply the app's own volume slider on top of that. The stream
+        // being maxed out above just guarantees it's never silently muted
+        // by a low phone alarm-volume setting — this is what actually
+        // makes the in-app slider have a real effect on the azan's
+        // loudness, which it never did before (previously the slider only
+        // affected the manual "PLAY AZAN" test button, never the real
+        // scheduled azan).
+        SharedPreferences prefs = getSharedPreferences(AzanAlarmPlugin.PREFS_NAME, MODE_PRIVATE);
+        float vol = prefs.getFloat(AzanAlarmPlugin.KEY_VOLUME, 1.0f);
+        mediaPlayer.setVolume(vol, vol);
 
         mediaPlayer.start();
     }

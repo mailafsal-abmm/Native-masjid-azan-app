@@ -292,7 +292,7 @@ body{font-family:'Inter','EPKTamil','EPKArabic',system-ui,sans-serif}
 
   <div class="vr">
     <span style="font-size:.65rem" id="uiVolume">🔈</span>
-    <input type="range" min="0" max="1" step="0.05" value="1" oninput="setV(this.value)">
+    <input type="range" min="0" max="1" step="0.05" id="volSlider" value="1" oninput="setV(this.value)">
     <span id="vp">100%🔊</span>
   </div>
 
@@ -354,8 +354,24 @@ function startKeepAlive(){
 function stopKeepAlive(){
   if(keepAliveAudio){ try{keepAliveAudio.pause();}catch(e){} keepAliveAudio=null; }
 }
-let CA=null,CK=null,VOL=1.0;
-function setV(v){VOL=parseFloat(v);document.getElementById('vp').textContent=Math.round(VOL*100)+'%🔊';if(CA&&CA.volume!==undefined)CA.volume=VOL;}
+let CA=null,CK=null,VOL=parseFloat(localStorage.getItem('azanVolume')||'1');
+(function initVolumeUI(){
+  const slider=document.getElementById('volSlider');
+  const vp=document.getElementById('vp');
+  if(slider) slider.value=String(VOL);
+  if(vp) vp.textContent=Math.round(VOL*100)+'%🔊';
+})();
+function setV(v){
+  VOL=parseFloat(v);
+  document.getElementById('vp').textContent=Math.round(VOL*100)+'%🔊';
+  if(CA&&CA.volume!==undefined)CA.volume=VOL;
+  localStorage.setItem('azanVolume', String(VOL));
+  // The automatic azan is played natively (not by this page's JS), so the
+  // slider needs to reach the native player too — otherwise it only ever
+  // affected the manual "PLAY AZAN" test button, never the real scheduled
+  // azan, which is exactly the bug this fixes.
+  sendScheduleToSW();
+}
 function stopAud(){if(CA){try{CA.pause();}catch(e){}CA=null;}CK=null;render();if(isNativeApp()&&window.Capacitor.Plugins.AzanAlarm){window.Capacitor.Plugins.AzanAlarm.stopAzan().catch(()=>{});}}
 function playKey(k){
   stopAud();
@@ -931,7 +947,7 @@ function syncNativeAlarms() {
   if (!window.Capacitor.Plugins || !window.Capacitor.Plugins.AzanAlarm) return;
   const prayers   = ALERTS_ON ? computeUpcomingPrayers() : [];
   const sunriseMs = ALERTS_ON ? computeSunriseMs() : null;
-  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs, silentMode: SILENT_MODE }).catch(err => {
+  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs, silentMode: SILENT_MODE, volume: VOL }).catch(err => {
     console.log('Native alarm schedule failed:', err);
   });
 }

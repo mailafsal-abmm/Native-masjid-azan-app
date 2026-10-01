@@ -11,6 +11,19 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(QiblaCompassPlugin.class);
         super.onCreate(savedInstanceState);
 
+        // Always clear the WebView's cache on startup and reload. Android's
+        // WebView can otherwise keep serving old cached HTML/JS/CSS even
+        // after installing a fresh APK — showing outdated screens/behavior
+        // until the cache naturally expires on its own. For an app like
+        // this, where all content is bundled locally (nothing fetched over
+        // a real network), clearing cache costs nothing noticeable — the
+        // reload is instant — so it's safe to do unconditionally on every
+        // launch rather than trying to track version numbers.
+        if (getBridge() != null && getBridge().getWebView() != null) {
+            getBridge().getWebView().clearCache(true);
+            getBridge().getWebView().reload();
+        }
+
         // Explicit back-button handling using the modern AndroidX API.
         // Without this, the phone's back button/gesture can silently do
         // nothing on some Android versions (especially 13/14, which

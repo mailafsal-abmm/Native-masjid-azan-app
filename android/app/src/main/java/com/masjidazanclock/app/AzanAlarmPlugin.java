@@ -54,6 +54,7 @@ public class AzanAlarmPlugin extends Plugin {
     public static final int TYPE_SUNRISE = 3;
     public static final String KEY_SUNRISE_MS = "sunrise_ms";
     public static final String KEY_SILENT_MODE = "silent_mode";
+    public static final String KEY_VOLUME = "azan_volume";
 
     // Lets AzanPlaybackService (a completely separate class with no direct
     // access to the JS bridge) tell the app's UI when automatic playback
@@ -151,6 +152,13 @@ public class AzanAlarmPlugin extends Plugin {
             // independently of this call, possibly hours/days later).
             boolean silentMode = call.getData().optBoolean("silentMode", false);
             editor.putBoolean(KEY_SILENT_MODE, silentMode);
+
+            // Azan volume, same reasoning — read fresh by AzanPlaybackService
+            // at the moment playback actually starts, since that happens
+            // independently of this call.
+            float volume = (float) call.getData().optDouble("volume", 1.0);
+            editor.putFloat(KEY_VOLUME, volume);
+
             editor.apply();
 
             JSObject result = new JSObject();
