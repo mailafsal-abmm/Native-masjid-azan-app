@@ -1,6 +1,7 @@
 package com.masjidazanclock.app;
 
 import android.os.Bundle;
+import android.webkit.ValueCallback;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
 
@@ -25,22 +26,37 @@ public class MainActivity extends BridgeActivity {
         }
 
         // Explicit back-button handling using the modern AndroidX API.
-        // Without this, the phone's back button/gesture can silently do
-        // nothing on some Android versions (especially 13/14, which
-        // changed how back navigation works system-wide) — relying on
-        // Capacitor's older default alone isn't reliable everywhere.
-        // This: goes back within the app's own screen history if there is
-        // any (e.g. Settings/Qibla open), otherwise exits/backgrounds the
-        // app normally, exactly like any other Android app.
+        //
+        // Settings and Qibla are shown/hidden with plain CSS classes in the
+        // page's own JS, not real browser navigation — so WebView.canGoBack()
+        // (what the previous version of this checked) is ALWAYS false while
+        // either is open, meaning the app always jumped straight to exiting
+        // instead of closing the open panel first. That was the real bug.
+        //
+        // The fix: ask the page's own JS (via handleAndroidBack(), defined
+        // in index.html) whether something is open and gets closed by this
+        // press. Only exit/minimize the app when JS reports nothing was open.
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
-                if (getBridge() != null && getBridge().getWebView().canGoBack()) {
-                    getBridge().getWebView().goBack();
-                } else {
+                if (getBridge() == null || getBridge().getWebView() == null) {
                     setEnabled(false);
                     getOnBackPressedDispatcher().onBackPressed();
+                    return;
                 }
+                getBridge().getWebView().evaluateJavascript(
+                    "(function(){ try { return window.handleAndroidBack ? window.handleAndroidBack() : false; } catch(e) { return false; } })()",
+                    new ValueCallback<String>() {
+                        @Override
+                        public void onReceiveValue(String result) {
+                            boolean handledByPage = "true".equals(result);
+                            if (!handledByPage) {
+                                setEnabled(false);
+                                getOnBackPressedDispatcher().onBackPressed();
+                            }
+                        }
+                    }
+                );
             }
         });
     }

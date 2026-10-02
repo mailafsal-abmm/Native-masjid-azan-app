@@ -1243,6 +1243,27 @@ function toggleQibla(){
   p.classList.toggle('open');
   p.style.display=p.classList.contains('open')?'block':'none'; if(p.classList.contains('open')){ setTimeout(()=>p.scrollIntoView({behavior:'smooth',block:'nearest'}),30); locateForQibla(); }
 }
+
+// Called from native Android code (MainActivity) when the system back
+// button/gesture is pressed. Settings and Qibla are shown/hidden with
+// plain CSS classes, not real page navigation, so there's no browser
+// history for Android to detect on its own — this is what lets the
+// back button close whichever panel is open first, and only exit/
+// minimize the app when neither one is showing.
+function handleAndroidBack(){
+  const sp = document.getElementById('sp');
+  if (sp && sp.classList.contains('op')) {
+    sp.classList.remove('op');
+    return true;
+  }
+  const qp = document.getElementById('qiblaPanel');
+  if (qp && qp.classList.contains('open')) {
+    qp.classList.remove('open');
+    qp.style.display = 'none';
+    return true;
+  }
+  return false; // nothing open — let native handle exit/minimize
+}
 async function enableQibla(){
   // On the native Android app, use the smooth, accurate fused-sensor
   // compass instead of the web DeviceOrientation API.
