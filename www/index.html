@@ -1374,6 +1374,26 @@ function openBatteryOptimizationSettings(){
     }
   });
 
+  // Correction on top of the event above: directly ASK the native side
+  // "is azan actually playing right now?" whenever the app opens or comes
+  // back to the foreground. This catches the case the push event alone
+  // can miss — e.g. azan started or finished while this exact page wasn't
+  // loaded/listening yet — so the Stop button can never get stuck wrong
+  // in either direction (stuck showing, or stuck hidden).
+  function syncAzanPlayingState(){
+    aa.isAzanPlaying().then(res => {
+      if (res && res.playing) {
+        showFloatingStop(res.key || '');
+      } else {
+        removeFloatingStop();
+      }
+    }).catch(()=>{});
+  }
+  syncAzanPlayingState();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncAzanPlayingState();
+  });
+
   const exactBtn=document.getElementById('exactAlarmBtn');
   const battBtn=document.getElementById('batteryOptBtn');
   if(exactBtn) exactBtn.style.display='block';

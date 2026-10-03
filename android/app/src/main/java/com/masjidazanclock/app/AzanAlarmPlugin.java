@@ -326,4 +326,17 @@ public class AzanAlarmPlugin extends Plugin {
         AzanPlaybackService.stopIfRunning();
         call.resolve();
     }
+
+    // Lets the app directly ask "is azan actually playing right now?" —
+    // used whenever the app opens or comes back to the foreground, as a
+    // correction on top of the push-based azanPlaybackState events, so the
+    // Stop button is always accurate even if a push event was ever missed
+    // (e.g. the app wasn't open yet when playback started or stopped).
+    @PluginMethod
+    public void isAzanPlaying(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("playing", AzanPlaybackService.isCurrentlyPlaying());
+        result.put("key", AzanPlaybackService.getCurrentPlayingKey() == null ? "" : AzanPlaybackService.getCurrentPlayingKey());
+        call.resolve(result);
+    }
 }

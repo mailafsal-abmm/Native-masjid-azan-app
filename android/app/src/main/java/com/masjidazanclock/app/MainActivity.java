@@ -29,19 +29,28 @@ public class MainActivity extends BridgeActivity {
         //
         // Settings and Qibla are shown/hidden with plain CSS classes in the
         // page's own JS, not real browser navigation — so WebView.canGoBack()
-        // (what the previous version of this checked) is ALWAYS false while
+        // (what an earlier version of this checked) is ALWAYS false while
         // either is open, meaning the app always jumped straight to exiting
-        // instead of closing the open panel first. That was the real bug.
+        // instead of closing the open panel first. That was fixed by asking
+        // the page's own JS (via handleAndroidBack(), defined in index.html)
+        // whether something is open and gets closed by this press.
         //
-        // The fix: ask the page's own JS (via handleAndroidBack(), defined
-        // in index.html) whether something is open and gets closed by this
-        // press. Only exit/minimize the app when JS reports nothing was open.
+        // IMPORTANT: this callback must NEVER call setEnabled(false) on
+        // itself. An earlier version did that as part of "fall through to
+        // the default back behavior" when nothing was open — but disabling
+        // it that way is PERMANENT for the rest of this Activity's life,
+        // since onCreate() only runs once. That meant the very first time
+        // you backed out from the main screen, this callback switched off
+        // for good — explaining exactly the reported bug ("works once, then
+        // stops working at all, even for closing Settings/Qibla"). Calling
+        // moveTaskToBack() directly instead — the same thing pressing Home
+        // does — avoids ever needing to disable this callback at all, so it
+        // keeps working correctly for the entire time the app is open.
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
             public void handleOnBackPressed() {
                 if (getBridge() == null || getBridge().getWebView() == null) {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
+                    moveTaskToBack(true);
                     return;
                 }
                 getBridge().getWebView().evaluateJavascript(
@@ -51,8 +60,7 @@ public class MainActivity extends BridgeActivity {
                         public void onReceiveValue(String result) {
                             boolean handledByPage = "true".equals(result);
                             if (!handledByPage) {
-                                setEnabled(false);
-                                getOnBackPressedDispatcher().onBackPressed();
+                                moveTaskToBack(true);
                             }
                         }
                     }
