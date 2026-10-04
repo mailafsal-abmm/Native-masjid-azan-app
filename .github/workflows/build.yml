@@ -41,6 +41,12 @@ jobs:
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
           echo "Debug keystore found and applied — signature will match previous builds."
+          # Print the fingerprint in plain sight on every build, so a
+          # mismatch is visible at a glance just by scrolling two builds'
+          # logs side by side — no need to extract the APK itself to check.
+          echo "Keystore SHA256 fingerprint (should be identical on every build):"
+          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android \
+            | grep "SHA256:" | tee /tmp/keystore_fingerprint.txt
 
       - name: Set up Gradle 8.4
         uses: gradle/actions/setup-gradle@v3
@@ -59,6 +65,28 @@ jobs:
         # even though the correct keystore was in place. This flag forces
         # a genuine fresh build and sign every single time.
         run: gradle assembleDebug --no-build-cache
+
+      - name: Verify the APK was actually signed with our keystore
+        # This is the real safety net: don't just trust that the earlier
+        # steps worked — directly check the finished APK's own embedded
+        # certificate and compare it to the keystore we intended to use.
+        # If they ever differ (e.g. a stale/old workflow re-run, a build
+        # cache slipping through, anything), FAIL here instead of quietly
+        # uploading a wrongly-signed APK that looks like a normal success
+        # in the Actions UI — which is exactly what happened before this
+        # check existed, and is what caused the repeated confusion.
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          unzip -p "$APK" META-INF/*.RSA > /tmp/apk_cert.rsa 2>/dev/null || unzip -p "$APK" META-INF/*.DSA > /tmp/apk_cert.rsa
+          APK_FP=$(keytool -printcert -file /tmp/apk_cert.rsa | grep "SHA256:")
+          EXPECTED_FP=$(cat /tmp/keystore_fingerprint.txt)
+          echo "Keystore fingerprint: $EXPECTED_FP"
+          echo "APK's actual fingerprint: $APK_FP"
+          if [ "$APK_FP" != "$EXPECTED_FP" ]; then
+            echo "::error::SIGNATURE MISMATCH — the built APK was NOT signed with the committed debug.keystore! Do not use this APK; installing it will conflict with previous installs. This usually means an old workflow run was re-run instead of triggering a fresh build from the latest commit."
+            exit 1
+          fi
+          echo "✓ Confirmed: APK signature matches the committed keystore exactly."
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
