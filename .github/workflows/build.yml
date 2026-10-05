@@ -32,20 +32,21 @@ jobs:
       - name: Accept Android SDK licenses (safety net)
         run: yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
-      - name: Use the committed debug keystore
+      - name: Verify the committed debug keystore exists
+        # android/app/build.gradle now points its debug signingConfig
+        # DIRECTLY at this repo-root file by explicit path — no more
+        # relying on Android's implicit default debug-keystore location,
+        # which is what was actually causing the repeated mismatches (its
+        # default didn't reliably line up with where earlier versions of
+        # this workflow were copying the keystore to). This step is now
+        # just a safety check that the file truly exists before building.
         run: |
           if [ ! -f debug.keystore ]; then
-            echo "::error::debug.keystore is missing from the repo root! This build would sign with a random key instead, breaking in-place updates and forcing an uninstall. Add debug.keystore to the repo and push again."
+            echo "::error::debug.keystore is missing from the repo root! The build would fail or sign with the wrong key. Add debug.keystore to the repo and push again."
             exit 1
           fi
-          mkdir -p ~/.android
-          cp debug.keystore ~/.android/debug.keystore
-          echo "Debug keystore found and applied — signature will match previous builds."
-          # Print the fingerprint in plain sight on every build, so a
-          # mismatch is visible at a glance just by scrolling two builds'
-          # logs side by side — no need to extract the APK itself to check.
           echo "Keystore SHA256 fingerprint (should be identical on every build):"
-          keytool -list -v -keystore ~/.android/debug.keystore -alias androiddebugkey -storepass android \
+          keytool -list -v -keystore debug.keystore -alias androiddebugkey -storepass android \
             | grep "SHA256:" | tee /tmp/keystore_fingerprint.txt
 
       - name: Set up Gradle 8.4
