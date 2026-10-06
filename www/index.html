@@ -1366,11 +1366,24 @@ function openBatteryOptimizationSettings(){
   // (finished naturally, stopped from the notification, or stopped from
   // inside the app). This is what makes the floating Stop button
   // disappear correctly in every case, matching the notification.
+  // The top "Azan time — [Prayer]" banner is a SEPARATE element from the
+  // floating Stop button, and its own hide logic only ever lived inside
+  // the JS audio-playback onended callbacks (playKey()'s own audio) — code
+  // that never runs for native-triggered azan, since native plays the
+  // sound itself. That's exactly why the banner was getting stuck visible:
+  // nothing was ever telling it to clear in that case. Folding it into
+  // this same native-state sync fixes it alongside the floating button.
+  function clearAzanUI(){
+    removeFloatingStop();
+    const b = document.getElementById('alertBanner');
+    if (b) b.style.opacity = '0';
+  }
+
   aa.addListener('azanPlaybackState', (data) => {
     if (data && data.playing) {
       showFloatingStop(data.key || '');
     } else {
-      removeFloatingStop();
+      clearAzanUI();
     }
   });
 
@@ -1385,7 +1398,7 @@ function openBatteryOptimizationSettings(){
       if (res && res.playing) {
         showFloatingStop(res.key || '');
       } else {
-        removeFloatingStop();
+        clearAzanUI();
       }
     }).catch(()=>{});
   }
