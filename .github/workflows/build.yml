@@ -56,26 +56,17 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        # --no-build-cache: our keystore is copied into place by a plain
-        # shell step above, outside Gradle's own dependency tracking, so
-        # Gradle has no way to know when it changes. Without this flag,
-        # Gradle's remote build cache can occasionally reuse an old,
-        # already-signed APK from a previous run instead of actually
-        # resigning with the keystore we just placed — which is exactly
-        # what caused the "package conflicts" install error to resurface
-        # even though the correct keystore was in place. This flag forces
-        # a genuine fresh build and sign every single time.
+        # --no-build-cache: forces a genuine fresh build and sign every
+        # single time, never reusing a cached, previously-signed APK.
         run: gradle assembleDebug --no-build-cache
 
       - name: Verify the APK was actually signed with our keystore
         # This is the real safety net: don't just trust that the earlier
         # steps worked — directly check the finished APK's own embedded
         # certificate and compare it to the keystore we intended to use.
-        # If they ever differ (e.g. a stale/old workflow re-run, a build
-        # cache slipping through, anything), FAIL here instead of quietly
-        # uploading a wrongly-signed APK that looks like a normal success
-        # in the Actions UI — which is exactly what happened before this
-        # check existed, and is what caused the repeated confusion.
+        # If they ever differ, FAIL here instead of quietly uploading a
+        # wrongly-signed APK that looks like a normal success in the
+        # Actions UI.
         run: |
           APK=android/app/build/outputs/apk/debug/app-debug.apk
           unzip -p "$APK" META-INF/*.RSA > /tmp/apk_cert.rsa 2>/dev/null || unzip -p "$APK" META-INF/*.DSA > /tmp/apk_cert.rsa
