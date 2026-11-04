@@ -340,12 +340,24 @@ window.addEventListener('load',()=>{
 // timeout behavior resumes the instant azan stops or finishes, exactly
 // like any other app.
 let wakeLockSentinel = null;
+let wakeWanted = false;
 async function keepAwake(){
+  wakeWanted = true;
+  if(wakeLockSentinel) return;               // already holding one
   try{
-    if('wakeLock' in navigator) wakeLockSentinel = await navigator.wakeLock.request('screen');
+    if('wakeLock' in navigator){
+      const s = await navigator.wakeLock.request('screen');
+      // Stop was pressed (or azan ended) while the request was still
+      // pending, or another request already won: give this one straight
+      // back so it can never be left holding the screen awake.
+      if(!wakeWanted || wakeLockSentinel){ try{ s.release(); }catch(e){} return; }
+      wakeLockSentinel = s;
+      s.addEventListener('release', () => { if(wakeLockSentinel === s) wakeLockSentinel = null; });
+    }
   }catch(e){}
 }
 function releaseWakeLock(){
+  wakeWanted = false;
   if(wakeLockSentinel){
     try{ wakeLockSentinel.release(); }catch(e){}
     wakeLockSentinel = null;
@@ -960,7 +972,7 @@ function computeSunriseMs() {
 }
 
 /**
- * Next upcoming Friday 12:30 PM, in local phone time. Unlike prayer times,
+ * Next upcoming Friday 12:00 PM (noon), in local phone time. Unlike prayer times,
  * this never shifts day to day, so it's computed once and simply rolled
  * forward to "next Friday" once the current one has passed — same
  * re-sync-on-every-app-open mechanism as everything else here, which is
@@ -970,14 +982,77 @@ function computeSunriseMs() {
  */
 function computeNextJummaMs() {
   const now = new Date();
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 30, 0, 0);
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
   const FRIDAY = 5; // Date.getDay(): 0=Sunday ... 5=Friday ... 6=Saturday
   let daysUntilFriday = (FRIDAY - d.getDay() + 7) % 7;
   if (daysUntilFriday === 0 && d.getTime() <= now.getTime()) {
-    daysUntilFriday = 7; // today is Friday but 12:30 PM already passed — use next week
+    daysUntilFriday = 7; // today is Friday but 12:00 PM already passed — use next week
   }
   d.setDate(d.getDate() + daysUntilFriday);
   return d.getTime();
+}
+
+// How many days of exact prayer times are handed to the phone's alarm system
+// at once. The phone keeps firing from these even if the app is never opened,
+// and each alarm re-arms itself the same number of days later (see
+// AlarmReceiver.rearmNext) — so the azan can no longer run out, and the first
+// two weeks are exactly the calculated times, not an approximation.
+const SCHEDULE_DAYS_AHEAD = 14;
+
+/**
+ * Exact alarm list for the next `daysAhead` days: every prayer's Azan,
+ * 5-min reminder and Iqama reminder, plus Sunrise — using the SAME timetable
+ * (getTimes), user adjustments (ADJ) and Iqama gaps as the screen shows.
+ * A prayer whose Iqama has already passed today is simply left out for today.
+ */
+function computeScheduleWindow(daysAhead) {
+  const mk = (dateObj, m) => new Date(
+    dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(),
+    Math.floor(m / 60), m % 60, 0, 0
+  ).getTime();
+  const nowMs = Date.now();
+  const today = new Date();
+  const dayAt = (off) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + off);
+  const out = [];
+  for (let d = 0; d < daysAhead; d++) {
+    for (const p of PRAYERS) {
+      // A prayer that is already completely over (only possible for today)
+      // takes its slot one window later instead — otherwise that slot would
+      // stay empty and the same weekday, two weeks on, would have no alarm
+      // for it until the app is next opened.
+      for (const off of [d, d + daysAhead]) {
+        const dateObj = dayAt(off);
+        const times = getTimes(dateObj);
+        if (!times) continue;
+        const base = pMin(times[p.k]);
+        if (base === null) continue;
+        const azanMin  = base + (ADJ[p.k] || 0);
+        const iqamaMin = azanMin + p.iq;
+        const azanMs   = mk(dateObj, azanMin);
+        const iqamaMs  = mk(dateObj, iqamaMin);
+        if (iqamaMs <= nowMs) continue; // over — try the later date
+        // "5 min before Iqama" capped at the real gap (Maghrib's is only ~3 min)
+        const iqamaReminderMs = iqamaMs - Math.min(5, p.iq) * 60 * 1000;
+        out.push({ key: p.k, name: p.k, nameEn: p.en, slot: p.k + '_' + d,
+                   azanMs: azanMs, iqamaMs: iqamaMs, iqamaReminderMs: iqamaReminderMs });
+        break;
+      }
+    }
+    // Sunrise — same rule. onlyType 3 = Sunrise notification only.
+    for (const off of [d, d + daysAhead]) {
+      const dateObj = dayAt(off);
+      const times = getTimes(dateObj);
+      if (!times) continue;
+      const srBase = pMin(times.Sunrise);
+      if (srBase === null) continue;
+      const srMs = mk(dateObj, srBase + (ADJ.Sunrise || 0));
+      if (srMs <= nowMs) continue;
+      out.push({ key: 'Sunrise', name: 'Sunrise', nameEn: 'Sunrise', slot: 'Sunrise_' + d,
+                 azanMs: srMs, iqamaMs: 0, onlyType: 3 });
+      break;
+    }
+  }
+  return out;
 }
 
 // ── NATIVE ANDROID BRIDGE ──────────────────────────────────────────────
@@ -991,10 +1066,9 @@ function isNativeApp() {
 function syncNativeAlarms() {
   if (!isNativeApp()) return;
   if (!window.Capacitor.Plugins || !window.Capacitor.Plugins.AzanAlarm) return;
-  const prayers   = ALERTS_ON ? computeUpcomingPrayers() : [];
-  const sunriseMs = ALERTS_ON ? computeSunriseMs() : null;
-  const jummaMs   = ALERTS_ON ? computeNextJummaMs() : null;
-  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, sunriseMs, jummaMs, silentMode: SILENT_MODE, volume: VOL }).catch(err => {
+  const prayers = ALERTS_ON ? computeScheduleWindow(SCHEDULE_DAYS_AHEAD) : [];
+  const jummaMs = ALERTS_ON ? computeNextJummaMs() : null;
+  window.Capacitor.Plugins.AzanAlarm.schedule({ prayers, jummaMs, windowDays: SCHEDULE_DAYS_AHEAD, silentMode: SILENT_MODE, volume: VOL }).catch(err => {
     console.log('Native alarm schedule failed:', err);
   });
 }
