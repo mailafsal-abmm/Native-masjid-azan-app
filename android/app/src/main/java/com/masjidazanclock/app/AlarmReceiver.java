@@ -27,6 +27,12 @@ public class AlarmReceiver extends BroadcastReceiver {
     public static final String CHANNEL_ID_ALERTS = "prayer_alerts";
     public static final String CHANNEL_ID_AZAN   = "prayer_azan";
 
+    // The notification's small icon (the crescent moon) is a plain white shape —
+    // Android only uses its outline and colours it with the notification's accent
+    // colour. This golden-yellow is that accent colour, so the moon shows yellow
+    // like the 🌙 emoji. Used by every notification the app posts.
+    public static final int ACCENT_GOLD = 0xFFFFC93C;
+
     @Override
     public void onReceive(Context context, Intent intent) {
         // Briefly wake the CPU so notification/service startup isn't cut off
@@ -142,6 +148,7 @@ public class AlarmReceiver extends BroadcastReceiver {
             PendingIntent pi = PendingIntent.getActivity(context, key.hashCode() + 5000, openIntent, flags);
             Notification n = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
                 .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(ACCENT_GOLD)
                 .setContentTitle("🕌 " + nameEn + " Azan time")
                 .setContentText("Open the app to play the azan")
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -197,6 +204,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(ACCENT_GOLD)
             .setContentTitle("🕌 Inshaa Allah - " + nameEn + " Azan starts in 5 mins")
             .setContentText(body)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -219,6 +227,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(ACCENT_GOLD)
             .setContentTitle("🕌 Inshaa allah - " + nameEn + " Iqama starts in 5 minutes")
             .setContentText(nameEn + " Prayer starts in 5 minutes")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -244,6 +253,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(ACCENT_GOLD)
             .setContentTitle("🌅 Sunrise — Alhamdulillah")
             .setContentText("Sunrise is now")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -266,6 +276,7 @@ public class AlarmReceiver extends BroadcastReceiver {
 
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(ACCENT_GOLD)
             .setContentTitle("🕌 Jumma reminder — Alhamdulillah")
             .setContentText("Noon - Inshaa Allah Ready for Jumma")
             .setStyle(new NotificationCompat.BigTextStyle().bigText("Noon - Inshaa Allah Ready for Jumma"))

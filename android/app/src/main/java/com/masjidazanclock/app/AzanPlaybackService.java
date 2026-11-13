@@ -16,6 +16,7 @@ import android.os.PowerManager;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -101,6 +102,7 @@ public class AzanPlaybackService extends Service {
 
         return new NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID_AZAN)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(AlarmReceiver.ACCENT_GOLD)
             .setContentTitle("🔇 " + nameEn + " Azan time (Silent Mode)")
             .setContentText("Silent Mode is on — no sound played")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
@@ -176,9 +178,13 @@ public class AzanPlaybackService extends Service {
         // in the notification is recoloured.
         SpannableString stopLabel = new SpannableString("🛑 Stop");
         stopLabel.setSpan(new ForegroundColorSpan(Color.RED), 0, stopLabel.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        // Make the single 🛑 symbol a little bigger so it is easier to see. (Only the
+        // symbol is enlarged — the word "Stop" and the button itself keep their size.)
+        stopLabel.setSpan(new RelativeSizeSpan(1.3f), 0, "🛑".length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
         return new NotificationCompat.Builder(this, AlarmReceiver.CHANNEL_ID_AZAN)
             .setSmallIcon(R.drawable.ic_stat_notify)
+            .setColor(AlarmReceiver.ACCENT_GOLD)
             .setContentTitle("🕌 " + nameEn + " - Azan playing now - Alhamdulillah")
             .setContentText("Tap STOP to silence")
             .setPriority(NotificationCompat.PRIORITY_HIGH)

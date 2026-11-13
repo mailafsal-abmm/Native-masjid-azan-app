@@ -1158,30 +1158,12 @@ function showBanner(msg, color, showStop){
   txt.textContent = msg;
   b.appendChild(txt);
 
-  // STOP button — only shown when adhan is playing
+  // The banner no longer has its own STOP button — the one and only STOP
+  // button is the floating one at the bottom (showFloatingStop). While the
+  // azan plays the message stays up; it is cleared together with that
+  // button when the azan stops.
   if(showStop){
-    const stopBtn = document.createElement('button');
-    stopBtn.textContent = '■ STOP';
-    stopBtn.style.cssText = [
-      'background:rgba(220,30,30,0.9)',
-      'border:2px solid #ff4444',
-      'color:#fff',
-      'font-family:Courier New,monospace',
-      'font-size:.85rem',
-      'font-weight:900',
-      'padding:6px 18px',
-      'border-radius:5px',
-      'cursor:pointer',
-      'letter-spacing:1px',
-      'flex-shrink:0',
-      'animation:pulse-red 0.8s infinite',
-    ].join(';');
-    stopBtn.onclick = () => {
-      stopAud();
-      b.style.opacity = '0';
-    };
-    b.appendChild(stopBtn);
-    // Keep banner visible until stopped
+    // Keep the message visible until the azan stops
     b._timer = null;
   } else {
     b._timer = setTimeout(() => { b.style.opacity='0'; }, 7000);
@@ -1199,6 +1181,8 @@ styleEl.textContent = `
   padding:16px 40px;border-radius:50px;cursor:pointer;letter-spacing:2px;
   animation:pulse-red 0.9s infinite,fadein 0.3s ease;
   box-shadow:0 4px 30px rgba(255,40,40,0.5);white-space:nowrap}
+/* the single STOP symbol: bigger, but its negative margin stops it making the button taller */
+#floatStop .stopSym{display:inline-block;font-size:1.3em;line-height:1;margin:-.25em 0;vertical-align:middle}
 `;
 document.head.appendChild(styleEl);
 
@@ -1208,7 +1192,11 @@ function showFloatingStop(prayerName) {
   keepAwake(); // azan is now playing — keep the screen on so Stop stays reachable
   const btn = document.createElement('button');
   btn.id = 'floatStop';
-  btn.innerHTML = '■ '+L().stop;
+  // The label text already begins with its own ■ (e.g. '■ STOP') and the
+  // old code put a second one in front of it, so two symbols showed. Show
+  // the label without its own symbol, behind ONE (larger) symbol.
+  const stopText = String(L().stop).replace(/^\s*■\s*/, '');
+  btn.innerHTML = '<span class="stopSym">■</span> ' + stopText;
   btn.onclick = () => {
     stopAud();
     removeFloatingStop();
