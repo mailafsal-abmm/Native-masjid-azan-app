@@ -56,6 +56,7 @@ public class AzanAlarmPlugin extends Plugin {
     public static final int TYPE_JUMMA   = 4;
     public static final String KEY_SUNRISE_MS = "sunrise_ms";
     public static final String KEY_JUMMA_MS = "jumma_ms";
+    public static final String KEY_JUMMA_ON = "jumma_on";
     public static final String KEY_SILENT_MODE = "silent_mode";
     public static final String KEY_VOLUME = "azan_volume";
     public static final String KEY_WINDOW_DAYS = "window_days";
@@ -72,6 +73,38 @@ public class AzanAlarmPlugin extends Plugin {
     static long shiftToFuture(long eventMs, long nowMs, long stepMs) {
         if (eventMs <= 0 || eventMs > nowMs) return 0L;
         return ((nowMs - eventMs) / stepMs + 1) * stepMs;
+    }
+
+    /** The next Friday at 12:00 noon in the phone's own (local) time zone, strictly after nowMs. */
+    static long nextFridayNoonMs(long nowMs) {
+        java.util.Calendar c = java.util.Calendar.getInstance();
+        c.setTimeInMillis(nowMs);
+        c.set(java.util.Calendar.HOUR_OF_DAY, 12);
+        c.set(java.util.Calendar.MINUTE, 0);
+        c.set(java.util.Calendar.SECOND, 0);
+        c.set(java.util.Calendar.MILLISECOND, 0);
+        int add = (java.util.Calendar.FRIDAY - c.get(java.util.Calendar.DAY_OF_WEEK) + 7) % 7;
+        if (add == 0 && c.getTimeInMillis() <= nowMs) add = 7;   // Friday noon already passed -> next week
+        c.add(java.util.Calendar.DAY_OF_MONTH, add);
+        return c.getTimeInMillis();
+    }
+
+    /**
+     * (Re)creates the weekly Jumma alarm for the next Friday noon, if the reminder is
+     * switched on. Safe to call at any time: it always uses the same alarm slot, so it
+     * replaces the existing one and can never produce a duplicate. It is called when the
+     * app syncs, when ANY alarm fires, and after a reboot/update — so a Jumma alarm that
+     * was lost for any reason is put back well before Friday.
+     */
+    static void ensureJumma(Context ctx) {
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        boolean on = prefs.contains(KEY_JUMMA_ON)
+            ? prefs.getBoolean(KEY_JUMMA_ON, false)
+            : prefs.getLong(KEY_JUMMA_MS, 0L) > 0;       // older install: was it scheduled?
+        if (!on) return;
+        long when = nextFridayNoonMs(System.currentTimeMillis());
+        scheduleOne(ctx, "Jumma", "Jumma", 0L, when, TYPE_JUMMA);
+        prefs.edit().putLong(KEY_JUMMA_MS, when).apply();
     }
 
     // Lets AzanPlaybackService (a completely separate class with no direct
@@ -108,6 +141,16 @@ public class AzanAlarmPlugin extends Plugin {
         // Cancel everything previously scheduled before setting the new batch,
         // so stale alarms from an old schedule never fire.
         cancelAllKnown(ctx);
+
+        // Jumma first — before the long prayer list — so nothing below can keep it from
+        // being set. The page only says whether the reminder is on (alerts enabled); the
+        // actual time (next Friday 12:00, local) is worked out here on the phone.
+        boolean jummaOn = call.getData().optLong("jummaMs", 0L) > 0;
+        SharedPreferences.Editor jEd = ctx.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
+        jEd.putBoolean(KEY_JUMMA_ON, jummaOn);
+        if (!jummaOn) jEd.remove(KEY_JUMMA_MS);
+        jEd.apply();
+        if (jummaOn) ensureJumma(ctx);
 
         JSONArray toPersist = new JSONArray();
 
@@ -181,19 +224,6 @@ public class AzanAlarmPlugin extends Plugin {
                 editor.putLong(KEY_SUNRISE_MS, sunriseMs);
             } else {
                 editor.remove(KEY_SUNRISE_MS);
-            }
-
-            // Weekly Jumma reminder: same plain-notification, no-azan-sound
-            // treatment as Sunrise. JS recomputes "next Friday 12:30 PM"
-            // every time this runs, so re-syncing (on app open, daily
-            // rollover, etc.) naturally rolls it forward week to week —
-            // no separate weekly-repeating alarm mechanism needed.
-            long jummaMs = call.getData().optLong("jummaMs", 0L);
-            if (jummaMs > System.currentTimeMillis()) {
-                scheduleOne(ctx, "Jumma", "Jumma", 0L, jummaMs, TYPE_JUMMA);
-                editor.putLong(KEY_JUMMA_MS, jummaMs);
-            } else {
-                editor.remove(KEY_JUMMA_MS);
             }
 
             // Emergency silent mode — persisted so AlarmReceiver/AzanPlaybackService

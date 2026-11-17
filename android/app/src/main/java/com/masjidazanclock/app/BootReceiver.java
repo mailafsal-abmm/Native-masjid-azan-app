@@ -42,12 +42,8 @@ public class BootReceiver extends BroadcastReceiver {
             AzanAlarmPlugin.scheduleOne(context, "Sunrise", "Sunrise", 0L, sunriseMs, AzanAlarmPlugin.TYPE_SUNRISE);
         }
 
-        // Weekly Jumma reminder (rolled forward by whole weeks if stale).
-        long jummaMs = prefs.getLong(AzanAlarmPlugin.KEY_JUMMA_MS, 0L);
-        if (jummaMs > 0) {
-            jummaMs += AzanAlarmPlugin.shiftToFuture(jummaMs, now, AzanAlarmPlugin.WEEK_MS);
-            AzanAlarmPlugin.scheduleOne(context, "Jumma", "Jumma", 0L, jummaMs, AzanAlarmPlugin.TYPE_JUMMA);
-        }
+        // Weekly Jumma reminder: worked out fresh for the next Friday noon (local time).
+        AzanAlarmPlugin.ensureJumma(context);
 
         String json = prefs.getString(AzanAlarmPlugin.KEY_SCHEDULE_JSON, null);
         if (json == null) return;

@@ -342,19 +342,10 @@ window.addEventListener('load',()=>{
 let wakeLockSentinel = null;
 let wakeWanted = false;
 async function keepAwake(){
-  wakeWanted = true;
-  if(wakeLockSentinel) return;               // already holding one
-  try{
-    if('wakeLock' in navigator){
-      const s = await navigator.wakeLock.request('screen');
-      // Stop was pressed (or azan ended) while the request was still
-      // pending, or another request already won: give this one straight
-      // back so it can never be left holding the screen awake.
-      if(!wakeWanted || wakeLockSentinel){ try{ s.release(); }catch(e){} return; }
-      wakeLockSentinel = s;
-      s.addEventListener('release', () => { if(wakeLockSentinel === s) wakeLockSentinel = null; });
-    }
-  }catch(e){}
+  // Deliberately does nothing now. Keeping the screen on while the azan plays is done
+  // by the phone side (MainActivity), from the real playback state. The web wake lock
+  // used before could be left holding the screen awake after the azan ended, so the
+  // page no longer requests one at all.
 }
 function releaseWakeLock(){
   wakeWanted = false;

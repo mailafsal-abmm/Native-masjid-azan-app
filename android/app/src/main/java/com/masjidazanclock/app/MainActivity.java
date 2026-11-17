@@ -1,9 +1,12 @@
 package com.masjidazanclock.app;
 
 import android.os.Bundle;
+import android.view.WindowManager;
 import android.webkit.ValueCallback;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
+
+import java.lang.ref.WeakReference;
 
 public class MainActivity extends BridgeActivity {
     @Override
@@ -67,5 +70,53 @@ public class MainActivity extends BridgeActivity {
                 );
             }
         });
+    }
+
+    // ---- Screen on ONLY while the azan is actually playing -------------------------
+    // Previously the screen was held awake by a web "wake lock" requested from the page.
+    // That could be left holding the screen on after the azan ended (for example when
+    // the app was opened from the azan notification, or the page reloaded while it
+    // played). The screen-on state is now decided here, from the real playback state:
+    // on while the azan plays, cleared the moment it stops/finishes, and re-checked
+    // every time the screen comes back — so the phone's normal screen timeout is
+    // restored no matter how the app was opened.
+    private static WeakReference<MainActivity> current;
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        current = new WeakReference<>(this);
+        applyKeepScreenOn(AzanPlaybackService.isCurrentlyPlaying());
+    }
+
+    @Override
+    public void onPause() {
+        applyKeepScreenOn(false);
+        super.onPause();
+    }
+
+    @Override
+    public void onDestroy() {
+        if (current != null && current.get() == this) current = null;
+        super.onDestroy();
+    }
+
+    /** Called by AzanPlaybackService when playback starts (true) or ends/stops (false). */
+    public static void setKeepScreenOnWhilePlaying(final boolean on) {
+        final MainActivity a = current != null ? current.get() : null;
+        if (a == null) return; // app not on screen — onResume() applies the right state later
+        a.runOnUiThread(() -> a.applyKeepScreenOn(on));
+    }
+
+    private void applyKeepScreenOn(boolean on) {
+        if (on) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            // also clear any keep-screen-on the web view itself may have been left holding
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().setKeepScreenOn(false);
+            }
+        }
     }
 }

@@ -57,12 +57,23 @@ public class AlarmReceiver extends BroadcastReceiver {
             // for a day or more (the app only re-schedules when opened).
             rearmNext(context, intent, key, nameEn, iqamaMs, type);
 
+            // Self-heal: every alarm that fires also puts the weekly Jumma alarm back if it
+            // was ever lost (it only exists once a week, so a lost one would otherwise go
+            // unnoticed until the Friday it fails to appear).
+            try { AzanAlarmPlugin.ensureJumma(context); } catch (Exception ignored) {}
+
             SharedPreferences prefs = context.getSharedPreferences(AzanAlarmPlugin.PREFS_NAME, Context.MODE_PRIVATE);
             boolean silent = prefs.getBoolean(AzanAlarmPlugin.KEY_SILENT_MODE, false);
 
             ensureChannels(context);
 
-            if (type == AzanAlarmPlugin.TYPE_NOTIFY5) {
+            if ("Jumma".equals(key)) {
+                // Jumma reminder: a plain notification, NEVER the azan player. Decided by
+                // name so it can never be mistaken for a prayer.
+                showJumma(context, silent);
+            } else if ("Sunrise".equals(key)) {
+                showSunrise(context, silent);
+            } else if (type == AzanAlarmPlugin.TYPE_NOTIFY5) {
                 showNotify5(context, key, nameEn, iqamaMs, silent);
             } else if (type == AzanAlarmPlugin.TYPE_IQAMA5) {
                 showIqama5(context, key, nameEn, silent);
@@ -111,6 +122,7 @@ public class AlarmReceiver extends BroadcastReceiver {
      */
     private void rearmNext(Context context, Intent intent, String key, String nameEn, long iqamaMs, int type) {
         try {
+            if (type == AzanAlarmPlugin.TYPE_JUMMA) return;   // re-created by ensureJumma()
             long trig = intent.getLongExtra("triggerAtMs", 0L);
             if (trig <= 0 || key == null) return;
             String slot = intent.getStringExtra("slot");
@@ -254,8 +266,7 @@ public class AlarmReceiver extends BroadcastReceiver {
         Notification notification = new NotificationCompat.Builder(context, CHANNEL_ID_ALERTS)
             .setSmallIcon(R.drawable.ic_stat_notify)
             .setColor(ACCENT_GOLD)
-            .setContentTitle("🌅 Sunrise — Alhamdulillah")
-            .setContentText("Sunrise is now")
+            .setContentTitle("🌅 Sunrise Now — Alhamdulillah")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
             .setContentIntent(pi)

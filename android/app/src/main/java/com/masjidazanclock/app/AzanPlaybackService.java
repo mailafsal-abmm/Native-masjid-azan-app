@@ -88,6 +88,7 @@ public class AzanPlaybackService extends Service {
         currentPlayingKey = key;
         startForeground(NOTIF_ID, buildNotification(nameEn));
         AzanAlarmPlugin.notifyPlaybackState(true, key); // tells the app UI "azan is now playing"
+        MainActivity.setKeepScreenOnWhilePlaying(true); // screen stays on ONLY while the azan plays
         playAzan(key);
 
         return START_NOT_STICKY;
@@ -205,6 +206,7 @@ public class AzanPlaybackService extends Service {
         // Stop inside the app. This is the one place all three funnel
         // through, so the app and notification always end up in sync.
         AzanAlarmPlugin.notifyPlaybackState(false, null);
+        MainActivity.setKeepScreenOnWhilePlaying(false); // back to the phone's normal screen timeout
     }
 
     private void stopPlaybackInternal() {
@@ -229,6 +231,7 @@ public class AzanPlaybackService extends Service {
         // Safety net in case the OS kills the service directly without
         // going through stopPlayback() — harmless to send this twice.
         AzanAlarmPlugin.notifyPlaybackState(false, null);
+        MainActivity.setKeepScreenOnWhilePlaying(false); // back to the phone's normal screen timeout
         super.onDestroy();
     }
 
